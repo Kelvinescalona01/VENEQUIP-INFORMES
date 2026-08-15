@@ -1,5 +1,14 @@
 import * as XLSX from 'xlsx';
 import { InformeTecnico } from './types';
+import { 
+  buildExcelDatabaseWorkbook, 
+  getLinkedSpreadsheetId, 
+  DEFAULT_LINKED_SPREADSHEET_ID,
+  recordSessionAuditLog,
+  getLocalUsers,
+  saveLocalUsers,
+  LocalUser
+} from './databaseManager';
 
 export interface DriveFolderInfo {
   id: string;
@@ -678,16 +687,6 @@ export async function sendReportEmailViaGmail(
     throw error;
   }
 }
-
-import { 
-  buildExcelDatabaseWorkbook, 
-  getLinkedSpreadsheetId, 
-  DEFAULT_LINKED_SPREADSHEET_ID,
-  recordSessionAuditLog,
-  getLocalUsers,
-  saveLocalUsers,
-  LocalUser
-} from './databaseManager';
 
 /**
  * Uploads/Overwrites the official Venequip database workbook directly to the linked Google Drive file.
