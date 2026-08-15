@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 94" width="280" height="94">
+  <!-- Outer White Background -->
+  <rect x="2" y="2" width="276" height="90" rx="6" fill="#FFFFFF" />
+
+  <!-- Outer Black Border -->
+  <rect x="2" y="2" width="276" height="90" rx="6" stroke="#000000" stroke-width="3.5" fill="none" />
+
+  <!-- Top Header: CONSORCIO DE COGESTIÓN -->
+  <text x="140" y="17" text-anchor="middle" fill="#000000" font-size="12.5" font-weight="900" font-family="'Arial', 'Helvetica Neue', sans-serif" letter-spacing="0.3">
+    CONSORCIO DE COGESTIÓN
+  </text>
+
+  <!-- Orange Continuous Border Frame with Gap for 'V' (#E67E00 / #F07D00) -->
+  <!-- 1. Left top segment (from left corner to V) and left vertical line -->
+  <path d="M 12 68 L 12 26 L 31 26" stroke="#E67E00" stroke-width="3.5" stroke-linecap="square" stroke-linejoin="miter" fill="none" />
+
+  <!-- 2. Main top segment (from right edge of V across enequip to right corner), right vertical edge, and bottom line across to left corner -->
+  <path d="M 68 26 L 268 26 L 268 68 L 12 68" stroke="#E67E00" stroke-width="3.5" stroke-linecap="square" stroke-linejoin="miter" fill="none" />
+
+  <!-- Capital 'V' that cuts through and extends above the top orange line -->
+  <text x="30" y="64" fill="#000000" font-size="48" font-weight="900" font-family="'Arial Black', 'Impact', sans-serif" letter-spacing="-1.5">
+    V
+  </text>
+
+  <!-- Lowercase 'enequip' positioned cleanly within the orange frame -->
+  <text x="68" y="62" fill="#000000" font-size="41" font-weight="900" font-family="'Arial Black', 'Trebuchet MS', sans-serif" letter-spacing="-0.8">
+    enequip
+  </text>
+
+  <!-- Bottom RIF Identifier -->
+  <text x="140" y="83" text-anchor="middle" fill="#000000" font-size="12.5" font-weight="900" font-family="'Arial', 'Helvetica Neue', sans-serif" letter-spacing="0.8">
+    J404644865
+  </text>
+</svg>

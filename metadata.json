@@ -1,0 +1,8 @@
+{
+  "name": "Venequip - Informes Técnicos CAT",
+  "description": "Sistema Integral de Generación, Gestión y Sincronización de Informes Técnicos Venequip S.A.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

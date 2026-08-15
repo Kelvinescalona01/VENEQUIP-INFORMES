@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  #venequip-header,
+  header,
+  footer,
+  #modal-ai-analyzer-backdrop,
+  #modal-signature-canvas-backdrop,
+  #modal-json-viewer-backdrop {
+    display: none !important;
+  }
+
+  #venequip-official-document {
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
