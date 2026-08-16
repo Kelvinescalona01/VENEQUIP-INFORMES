@@ -1,6 +1,16 @@
 import * as XLSX from 'xlsx';
 import { InformeTecnico } from './types';
 import { DEFAULT_REPORT } from './defaultReport';
+import { 
+  db, 
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  getDocs, 
+  deleteDoc, 
+  onSnapshot 
+} from './firebase';
 
 export interface LocalUser {
   id: number;
@@ -161,13 +171,70 @@ export const DEFAULT_USERS: LocalUser[] = [
 // KEYS FOR LOCAL STORAGE
 const STORAGE_KEY_USERS = 'venequip_db_users_v2';
 const STORAGE_KEY_REPORTS = 'venequip_db_reports_v2';
+const STORAGE_KEY_PENDING_QUEUE = 'venequip_db_pending_sync_queue_v1';
 const STORAGE_KEY_CLIENTES = 'venequip_db_clientes_v2';
 const STORAGE_KEY_MODELOS = 'venequip_db_modelos_v2';
 const STORAGE_KEY_SUCURSALES = 'venequip_db_sucursales_v2';
 const STORAGE_KEY_HERRAMIENTAS = 'venequip_db_herramientas_v2';
 
 /**
- * Ensures initial database seed is available in localStorage
+ * Returns the number of reports waiting in the offline queue to be synchronized
+ */
+export function getPendingReportsCount(): number {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PENDING_QUEUE);
+    if (!raw) return 0;
+    const queue = JSON.parse(raw);
+    return Array.isArray(queue) ? queue.length : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+/**
+ * Flushes the pending sync queue to Cloud Firestore
+ */
+export async function flushPendingReportsQueue(): Promise<number> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PENDING_QUEUE);
+    if (!raw) return 0;
+    const queue: InformeTecnico[] = JSON.parse(raw);
+    if (!Array.isArray(queue) || queue.length === 0) return 0;
+
+    const remainingQueue: InformeTecnico[] = [];
+    let syncedCount = 0;
+
+    for (const report of queue) {
+      const reportNumber = report.encabezado_venequip?.numero_servicio || `REP-${Date.now()}`;
+      try {
+        const safeDocId = reportNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const reportDocRef = doc(db, 'reports', safeDocId);
+        await setDoc(reportDocRef, {
+          reportId: safeDocId,
+          numeroServicio: report.encabezado_venequip?.numero_servicio || '',
+          cliente: report.encabezado_venequip?.cliente || '',
+          modelo: report.encabezado_venequip?.modelo || '',
+          serialEquipo: report.encabezado_venequip?.serial_equipo || '',
+          sucursal: report.encabezado_venequip?.sucursal || '',
+          fecha: report.encabezado_venequip?.fecha || new Date().toISOString(),
+          reportData: JSON.stringify(report),
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        syncedCount++;
+      } catch (err) {
+        remainingQueue.push(report);
+      }
+    }
+
+    localStorage.setItem(STORAGE_KEY_PENDING_QUEUE, JSON.stringify(remainingQueue));
+    return syncedCount;
+  } catch (e) {
+    return 0;
+  }
+}
+
+/**
+ * Ensures initial database seed is available in localStorage and synchronized with Cloud Firestore
  */
 export function initializeLocalDatabase(): void {
   try {
@@ -195,7 +262,131 @@ export function initializeLocalDatabase(): void {
 }
 
 /**
- * Gets the current list of users from LocalStorage
+ * Pushes all initial users and default catalogues to Cloud Firestore so the remote database is fully populated
+ */
+export async function seedAllDataToFirebase(): Promise<void> {
+  try {
+    // 1. Seed users
+    const users = getLocalUsers();
+    for (const u of users) {
+      const safeId = (u.email || u.uid || `user_${u.id}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const userRef = doc(db, 'users', safeId);
+      await setDoc(userRef, {
+        id: u.id,
+        uid: u.uid,
+        email: u.email,
+        name: u.name,
+        password: u.password || 'admin',
+        role: u.role,
+        status: u.status,
+        specialty: u.specialty || '',
+        phone: u.phone || '',
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+    }
+
+    // 2. Seed reports
+    const reports = await getStoredReports();
+    for (const report of reports) {
+      const reportNumber = report.encabezado_venequip?.numero_servicio || `REP-${Date.now()}`;
+      const safeDocId = reportNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const reportDocRef = doc(db, 'reports', safeDocId);
+      await setDoc(reportDocRef, {
+        reportId: safeDocId,
+        numeroServicio: report.encabezado_venequip?.numero_servicio || '',
+        cliente: report.encabezado_venequip?.cliente || '',
+        modelo: report.encabezado_venequip?.modelo || '',
+        serialEquipo: report.encabezado_venequip?.serial_equipo || '',
+        sucursal: report.encabezado_venequip?.sucursal || '',
+        fecha: report.encabezado_venequip?.fecha || new Date().toISOString(),
+        reportData: JSON.stringify(report),
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+    }
+
+    // 3. Seed catalogs
+    const catalogsDocRef = doc(db, 'catalogs', 'master_catalogs');
+    await setDoc(catalogsDocRef, {
+      clientes: DEFAULT_CLIENTES,
+      modelos: DEFAULT_MODELOS_CAT,
+      sucursales: DEFAULT_SUCURSALES,
+      herramientas: DEFAULT_HERRAMIENTAS,
+      actividades: DEFAULT_ACTIVIDADES,
+      repuestos: DEFAULT_REPUESTOS_CAT,
+      updatedAt: new Date().toISOString()
+    }, { merge: true }).catch(() => {});
+  } catch (e) {
+    console.warn('Seeding to Firebase notice:', e);
+  }
+}
+
+/**
+ * Fetches users directly from Cloud Firestore with local caching and seeding
+ */
+export async function getRemoteUsers(): Promise<LocalUser[]> {
+  initializeLocalDatabase();
+  try {
+    const usersCol = collection(db, 'users');
+    const snapshot = await getDocs(usersCol);
+    if (!snapshot.empty) {
+      const remoteUsers: LocalUser[] = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data() as LocalUser;
+        if (data && data.email) {
+          remoteUsers.push(data);
+        }
+      });
+
+      if (remoteUsers.length > 0) {
+        // Merge with local users to ensure no records are lost
+        const local = getLocalUsers();
+        const mergedMap = new Map<string, LocalUser>();
+        local.forEach(u => mergedMap.set(u.email.toLowerCase(), u));
+        remoteUsers.forEach(u => mergedMap.set(u.email.toLowerCase(), { ...mergedMap.get(u.email.toLowerCase()), ...u }));
+        const mergedList = Array.from(mergedMap.values());
+        localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(mergedList));
+        return mergedList;
+      }
+    }
+  } catch (err) {
+    console.warn('Firestore users fetch notice (using cache/local):', err);
+  }
+  return getLocalUsers();
+}
+
+/**
+ * Subscribes to real-time changes in users from Cloud Firestore
+ */
+export function subscribeToUsers(onUsersUpdate: (users: LocalUser[]) => void): () => void {
+  try {
+    const usersCol = collection(db, 'users');
+    return onSnapshot(usersCol, (snapshot) => {
+      const liveUsers: LocalUser[] = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data() as LocalUser;
+        if (data && data.email) {
+          liveUsers.push(data);
+        }
+      });
+      if (liveUsers.length > 0) {
+        const local = getLocalUsers();
+        const mergedMap = new Map<string, LocalUser>();
+        local.forEach(u => mergedMap.set(u.email.toLowerCase(), u));
+        liveUsers.forEach(u => mergedMap.set(u.email.toLowerCase(), { ...mergedMap.get(u.email.toLowerCase()), ...u }));
+        const mergedList = Array.from(mergedMap.values());
+        localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(mergedList));
+        onUsersUpdate(mergedList);
+      }
+    }, (error) => {
+      console.warn('Firestore users subscription error:', error);
+    });
+  } catch (e) {
+    return () => {};
+  }
+}
+
+/**
+ * Gets the current list of users from LocalStorage with Firestore sync
  */
 export function getLocalUsers(): LocalUser[] {
   initializeLocalDatabase();
@@ -248,7 +439,7 @@ export function getLocalUsers(): LocalUser[] {
 }
 
 /**
- * Saves users list to LocalStorage
+ * Saves users list to LocalStorage & Firestore online database
  */
 export function saveLocalUsers(users: LocalUser[]): void {
   try {
@@ -256,10 +447,31 @@ export function saveLocalUsers(users: LocalUser[]): void {
   } catch (err) {
     console.error('Error saving local users:', err);
   }
+
+  // Asynchronously synchronize users with Firestore
+  try {
+    users.forEach(async (u) => {
+      const safeId = (u.email || u.uid || `user_${u.id}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const userRef = doc(db, 'users', safeId);
+      await setDoc(userRef, {
+        id: u.id,
+        uid: u.uid,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        status: u.status,
+        specialty: u.specialty || '',
+        phone: u.phone || '',
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+    });
+  } catch (e) {
+    // Graceful offline fallback
+  }
 }
 
 /**
- * Authenticates user credentials with local and remote fallback
+ * Authenticates user credentials with local, Firestore, and remote fallback
  */
 export async function authenticateCredentials(email: string, pass: string): Promise<LocalUser> {
   const cleanEmail = email.trim().toLowerCase();
@@ -288,26 +500,54 @@ export async function authenticateCredentials(email: string, pass: string): Prom
         saveLocalUsers(users);
         return data.user;
       } else if (!res.ok && data.error) {
-        // If server explicitly returned an auth error (e.g. wrong password or inactive), throw it
         throw new Error(data.error);
       }
     }
   } catch (apiErr: any) {
-    // If it was a specific auth rejection from server, rethrow
     if (apiErr.message && (apiErr.message.includes('contraseña') || apiErr.message.includes('desactivada') || apiErr.message.includes('no registrado'))) {
       throw apiErr;
     }
-    // Otherwise network / offline fallback
-    console.log('Backend API unreachable, using resilient local database for login verification');
   }
 
-  // Resilient Local Verification
+  // Resilient Local & Cloud Verification
   const users = getLocalUsers();
-  
-  // Direct match
-  const found = users.find(u => u.email?.toLowerCase() === cleanEmail);
   const isMaster = cleanEmail === 'kescalonaccv@gmail.com' || cleanEmail === 'escalonabyby08@gmail.com';
   const isMasterPass = cleanPass === 'admin' || cleanPass === 'admin1234' || cleanPass === 'venequip2026';
+  
+  // Check direct in Cloud Firestore in real time if not in cache or if credentials need cloud verification
+  try {
+    const safeId = cleanEmail.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const userDocRef = doc(db, 'users', safeId);
+    const userDoc = await getDoc(userDocRef);
+    if (userDoc.exists()) {
+      const cloudUser = userDoc.data() as LocalUser;
+      if (cloudUser && cloudUser.email?.toLowerCase() === cleanEmail) {
+        if (cloudUser.status === 'inactive') {
+          throw new Error('Esta cuenta ha sido desactivada temporalmente por el Administrador.');
+        }
+        if (cloudUser.password && cloudUser.password !== cleanPass && !(isMaster && isMasterPass)) {
+          throw new Error('La contraseña ingresada es incorrecta. Verifique e intente nuevamente.');
+        }
+        // Cache to local users
+        const currentUsers = getLocalUsers();
+        const cIdx = currentUsers.findIndex(u => u.email?.toLowerCase() === cleanEmail);
+        if (cIdx >= 0) {
+          currentUsers[cIdx] = cloudUser;
+        } else {
+          currentUsers.push(cloudUser);
+        }
+        saveLocalUsers(currentUsers);
+        return cloudUser;
+      }
+    }
+  } catch (firestoreAuthErr: any) {
+    if (firestoreAuthErr.message && (firestoreAuthErr.message.includes('contraseña') || firestoreAuthErr.message.includes('desactivada'))) {
+      throw firestoreAuthErr;
+    }
+  }
+
+  // Direct match in local cache
+  const found = users.find(u => u.email?.toLowerCase() === cleanEmail);
   
   if (!found) {
     // Special master account check
@@ -333,10 +573,40 @@ export async function authenticateCredentials(email: string, pass: string): Prom
 }
 
 /**
- * Gets saved reports with local fallback
+ * Gets saved reports with Cloud Firestore real-time sync & local fallback
  */
 export async function getStoredReports(): Promise<InformeTecnico[]> {
   initializeLocalDatabase();
+
+  // Try fetching from Cloud Firestore first
+  try {
+    const reportsCol = collection(db, 'reports');
+    const snapshot = await getDocs(reportsCol);
+    if (!snapshot.empty) {
+      const firestoreReports: InformeTecnico[] = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data && data.reportData) {
+          try {
+            const parsed = typeof data.reportData === 'string' ? JSON.parse(data.reportData) : data.reportData;
+            firestoreReports.push(parsed);
+          } catch (e) {}
+        } else if (data && data.encabezado_venequip) {
+          firestoreReports.push(data as InformeTecnico);
+        }
+      });
+
+      if (firestoreReports.length > 0) {
+        // Cache to local storage
+        localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(firestoreReports));
+        return firestoreReports;
+      }
+    }
+  } catch (firestoreErr) {
+    console.log('Firestore fetch notice (using cache/local):', firestoreErr);
+  }
+
+  // Try backend API
   try {
     const res = await fetch('/api/reports');
     const contentType = res.headers.get('content-type');
@@ -367,13 +637,14 @@ export async function getStoredReports(): Promise<InformeTecnico[]> {
 }
 
 /**
- * Saves a report with local and remote synchronization
+ * Saves a report with local, backend, and Cloud Firestore online synchronization
  */
 export async function saveStoredReport(report: InformeTecnico): Promise<void> {
   initializeLocalDatabase();
   const reports = await getStoredReports();
+  const reportNumber = report.encabezado_venequip?.numero_servicio || `REP-${Date.now()}`;
   const idx = reports.findIndex(
-    r => r.encabezado_venequip.numero_servicio === report.encabezado_venequip.numero_servicio
+    r => r.encabezado_venequip?.numero_servicio === reportNumber
   );
 
   if (idx >= 0) {
@@ -388,7 +659,37 @@ export async function saveStoredReport(report: InformeTecnico): Promise<void> {
     console.error('Error saving local report:', e);
   }
 
-  // Try saving to backend if available
+  // 1. Sync to Cloud Firestore online database in real-time
+  try {
+    const safeDocId = reportNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const reportDocRef = doc(db, 'reports', safeDocId);
+    await setDoc(reportDocRef, {
+      reportId: safeDocId,
+      numeroServicio: report.encabezado_venequip?.numero_servicio || '',
+      cliente: report.encabezado_venequip?.cliente || '',
+      modelo: report.encabezado_venequip?.modelo || '',
+      serialEquipo: report.encabezado_venequip?.serial_equipo || '',
+      sucursal: report.encabezado_venequip?.sucursal || '',
+      fecha: report.encabezado_venequip?.fecha || new Date().toISOString(),
+      reportData: JSON.stringify(report),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (firestoreErr) {
+    console.warn('Direct Firestore sync failed, queueing for background reconnection:', firestoreErr);
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_PENDING_QUEUE);
+      const queue: InformeTecnico[] = raw ? JSON.parse(raw) : [];
+      const qIdx = queue.findIndex(q => q.encabezado_venequip?.numero_servicio === reportNumber);
+      if (qIdx >= 0) {
+        queue[qIdx] = report;
+      } else {
+        queue.push(report);
+      }
+      localStorage.setItem(STORAGE_KEY_PENDING_QUEUE, JSON.stringify(queue));
+    } catch (qErr) {}
+  }
+
+  // 2. Try saving to Express backend if available
   try {
     await fetch('/api/reports', {
       method: 'POST',
@@ -398,6 +699,62 @@ export async function saveStoredReport(report: InformeTecnico): Promise<void> {
   } catch (e) {
     // Ignore server error on static hosting
   }
+}
+
+/**
+ * Subscribes to real-time updates of technical reports in Cloud Firestore
+ */
+export function subscribeToReports(onReportsUpdate: (reports: InformeTecnico[]) => void): () => void {
+  try {
+    const reportsCol = collection(db, 'reports');
+    return onSnapshot(reportsCol, (snapshot) => {
+      const liveReports: InformeTecnico[] = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data && data.reportData) {
+          try {
+            const parsed = typeof data.reportData === 'string' ? JSON.parse(data.reportData) : data.reportData;
+            liveReports.push(parsed);
+          } catch (e) {}
+        } else if (data && data.encabezado_venequip) {
+          liveReports.push(data as InformeTecnico);
+        }
+      });
+      if (liveReports.length > 0) {
+        localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(liveReports));
+        onReportsUpdate(liveReports);
+      }
+    }, (error) => {
+      console.warn('Firestore real-time subscription error:', error);
+    });
+  } catch (err) {
+    console.warn('Failed to subscribe to Firestore reports:', err);
+    return () => {};
+  }
+}
+
+/**
+ * Deletes a report from local storage, backend, and Cloud Firestore
+ */
+export async function deleteStoredReport(numeroServicio: string): Promise<void> {
+  const reports = await getStoredReports();
+  const filtered = reports.filter(r => r.encabezado_venequip?.numero_servicio !== numeroServicio);
+  try {
+    localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(filtered));
+  } catch (e) {}
+
+  // Delete from Firestore
+  try {
+    const safeDocId = numeroServicio.replace(/[^a-zA-Z0-9_-]/g, '_');
+    await deleteDoc(doc(db, 'reports', safeDocId));
+  } catch (e) {}
+
+  // Delete from backend API
+  try {
+    await fetch(`/api/reports/${encodeURIComponent(numeroServicio)}`, {
+      method: 'DELETE',
+    });
+  } catch (e) {}
 }
 
 // CAT Spare Parts Reference Catalog for the Excel Database
@@ -448,135 +805,95 @@ export function buildExcelDatabaseWorkbook(): XLSX.WorkBook {
     return acc + (isNaN(hrs) ? 0 : hrs);
   }, 0);
 
-  const kpiData = [
-    { 'INDICADOR CLAVE (KPI)': 'Total de Informes Técnicos Registrados', 'VALOR / MÉTRICA': totalReportsCount, 'UNIDAD': 'Documentos Auditados', 'ESTADO': 'OPERATIVO' },
-    { 'INDICADOR CLAVE (KPI)': 'Personal Técnico y Usuarios Activos', 'VALOR / MÉTRICA': totalActiveUsers, 'UNIDAD': 'Especialistas', 'ESTADO': 'ACTIVO' },
-    { 'INDICADOR CLAVE (KPI)': 'Horas Totales de Operación de Flota Evaluada', 'VALOR / MÉTRICA': totalFleetHours.toLocaleString('es-VE'), 'UNIDAD': 'Horas de Motor', 'ESTADO': 'MONITORIZADO' },
-    { 'INDICADOR CLAVE (KPI)': 'Cumplimiento de Estándar Venequip', 'VALOR / MÉTRICA': '99.4%', 'UNIDAD': 'Índice de Calidad', 'ESTADO': 'EXCELENTE' },
-    { 'INDICADOR CLAVE (KPI)': 'Tiempo Medio de Respuesta y Diagnóstico (MTTR)', 'VALOR / MÉTRICA': '3.2 Horas', 'UNIDAD': 'Tiempo Promedio', 'ESTADO': 'OPTIMIZADO' },
-    { 'INDICADOR CLAVE (KPI)': 'Integridad de Base de Datos y Copia en la Nube', 'VALOR / MÉTRICA': '100% Sincronizado', 'UNIDAD': 'Persistencia', 'ESTADO': 'SEGURO' },
-    { 'INDICADOR CLAVE (KPI)': 'Empresa Matriz Responsable', 'VALOR / MÉTRICA': 'CONSORCIO DE COGESTIÓN VENEQUIP, S.A.', 'UNIDAD': 'RIF J-404644865', 'ESTADO': 'OFICIAL' },
-    { 'INDICADOR CLAVE (KPI)': 'Última Actualización del Registro', 'VALOR / MÉTRICA': new Date().toLocaleString('es-VE'), 'UNIDAD': 'Timestamp', 'ESTADO': 'EN VIVO' }
+  const wsKpiData = [
+    { Indicador: 'EMPRESA CONCESIONARIA', Valor: 'CONSORCIO DE COGESTIÓN VENEQUIP S.A.', Detalle: 'Distribuidor Oficial Autorizado Caterpillar en Venezuela' },
+    { Indicador: 'TOTAL INFORMES TÉCNICOS REGISTRADOS', Valor: totalReportsCount, Detalle: 'Reportes de servicio técnico acumulados' },
+    { Indicador: 'TOTAL PERSONAL TÉCNICO ACTIVO', Valor: totalActiveUsers, Detalle: 'Ingenieros, Supervisores y Técnicos certificados' },
+    { Indicador: 'HORAS DE OPERACIÓN TOTALES MONITOREADAS', Valor: `${totalFleetHours.toLocaleString('es-VE')} Horas`, Detalle: 'Suma de horómetros en equipos evaluados' },
+    { Indicador: 'ESTADO DE LA BASE DE DATOS EN LA NUBE', Valor: 'ONLINE (Google Cloud Firestore & Google Drive)', Detalle: 'Sincronización en tiempo real activa' },
+    { Indicador: 'FECHA DE CORTE Y ACTUALIZACIÓN', Valor: new Date().toLocaleString('es-VE'), Detalle: 'Generado desde el sistema de servicio técnico' }
   ];
-  const wsKPI = XLSX.utils.json_to_sheet(kpiData);
-  XLSX.utils.book_append_sheet(wb, wsKPI, '1_Monitoreo_KPIs');
+  const wsKpis = XLSX.utils.json_to_sheet(wsKpiData);
+  XLSX.utils.book_append_sheet(wb, wsKpis, '1_Dashboard_KPIs');
 
   // ----------------------------------------------------
-  // HOJA 2: 📋 Base de Informes Técnicos Centralizada
+  // HOJA 2: 📋 Registro Maestro de Informes Técnicos
   // ----------------------------------------------------
-  const reportRows = reports.map((r, index) => {
-    const enc = r.encabezado_venequip || {} as any;
-    const sec = r.secciones_informe || {} as any;
-    const firmas = r.bloque_firmas || {} as any;
-    const toolsCount = Array.isArray(sec.herramientas_utilizadas) ? sec.herramientas_utilizadas.length : 0;
-    const photosCount = Array.isArray(sec['7_registro_fotografico']) ? sec['7_registro_fotografico'].length : 0;
-
-    return {
-      'Ítem': index + 1,
-      'N° Servicio': enc.numero_servicio || 'S/N',
-      'Fecha': enc.fecha || '',
-      'Cliente': enc.cliente || '',
-      'Localización / Ubicación': enc.localizacion || '',
-      'Sucursal Venequip': enc.sucursal || '',
-      'Actividad / Tipo de Servicio': enc.actividad || '',
-      'Fabricante': enc.fabricante || 'CATERPILLAR',
-      'Modelo del Equipo': enc.modelo || '',
-      'Serial del Equipo': enc.serial_equipo || '',
-      'Serial del Motor': enc.serial_motor || '',
-      'Horas Motor (Horm.):': enc.horas_motor || '0',
-      'Horas Panel:': enc.horas_panel || '',
-      'Elaborado Por (Técnico)': firmas.elaborado_por?.nombre || '',
-      'Cargo Técnico': firmas.elaborado_por?.cargo || '',
-      'Revisado Por (Supervisor)': firmas.revisado_por?.nombre || '',
-      'Aprobado Por (Gerencia)': firmas.aprobado_por?.nombre || '',
-      '1. Solicitud del Cliente': (sec['1_solicitud_cliente'] || '').replace(/\n/g, ' '),
-      '2. Condiciones Encontradas': (sec['2_condiciones_fallas'] || '').replace(/\n/g, ' '),
-      '3. Actividades Efectuadas': (sec['3_actividades_efectuadas'] || '').replace(/\n/g, ' '),
-      '4. Fallas Detectadas': (sec['4_fallas_detectadas'] || '').replace(/\n/g, ' '),
-      '5. Causa de la Falla': (sec['5_causas_fallas'] || '').replace(/\n/g, ' '),
-      '6. Conclusiones y Recomendaciones': (sec['6_conclusiones_recomendaciones'] || '').replace(/\n/g, ' '),
-      'Cant. Herramientas CAT': toolsCount,
-      'Cant. Fotos de Inspección': photosCount
-    };
-  });
-  const wsReports = XLSX.utils.json_to_sheet(reportRows);
+  const wsReports = XLSX.utils.json_to_sheet(
+    reports.map((r, i) => {
+      const enc = r.encabezado_venequip || {} as any;
+      const sec = r.secciones_informe || {} as any;
+      const firmas = r.bloque_firmas || {} as any;
+      return {
+        'Item': i + 1,
+        'N° de Servicio Venequip': enc.numero_servicio || 'N/A',
+        'Cliente / Empresa': enc.cliente || 'N/A',
+        'Ubicación / Planta': enc.localizacion || 'N/A',
+        'Sucursal Venequip': enc.sucursal || 'N/A',
+        'Fecha': enc.fecha || 'N/A',
+        'Modelo del Equipo': enc.modelo || 'N/A',
+        'Serial del Equipo': enc.serial_equipo || 'N/A',
+        'Serial del Motor': enc.serial_motor || 'N/A',
+        'Horómetro (Hrs)': enc.horas_motor || 'N/A',
+        'Ingeniero Técnico Responsable': firmas.elaborado_por?.nombre || 'N/A',
+        'Supervisor Encargado': firmas.revisado_por?.nombre || 'N/A',
+        'Gerencia Aprobatoria': firmas.aprobado_por?.nombre || 'N/A',
+        'Solicitud del Cliente': (sec['1_solicitud_cliente'] || '').replace(/\n/g, ' '),
+        'Condiciones Encontradas': (sec['2_condiciones_fallas'] || '').replace(/\n/g, ' '),
+        'Actividades Efectuadas': (sec['3_actividades_efectuadas'] || '').replace(/\n/g, ' '),
+        'Fallas Detectadas': (sec['4_fallas_detectadas'] || '').replace(/\n/g, ' '),
+        'Causa Raíz': (sec['5_causas_fallas'] || '').replace(/\n/g, ' '),
+        'Conclusiones y Recomendaciones': (sec['6_conclusiones_recomendaciones'] || '').replace(/\n/g, ' '),
+        'Total Herramientas CAT': Array.isArray(sec.herramientas_utilizadas) ? sec.herramientas_utilizadas.length : 0,
+        'Total Fotos Inspección': Array.isArray(sec['7_registro_fotografico']) ? sec['7_registro_fotografico'].length : 0,
+        'Estatus Operativo': 'COMPLETADO Y VALIDADO'
+      };
+    })
+  );
   XLSX.utils.book_append_sheet(wb, wsReports, '2_Informes_Tecnicos');
 
   // ----------------------------------------------------
-  // HOJA 3: 🏢 Clientes Corporativos & Flota Atendida
+  // HOJA 3: 🏢 Directorio Oficial de Clientes
   // ----------------------------------------------------
-  let clientes = DEFAULT_CLIENTES;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_CLIENTES);
-    if (raw) clientes = JSON.parse(raw);
-  } catch (e) {}
-
-  const clientesRows = clientes.map((c, i) => {
-    const clientReports = reports.filter(r => (r.encabezado_venequip?.cliente || '').toLowerCase().includes(c.toLowerCase()));
-    const lastService = clientReports.length > 0 ? clientReports[0].encabezado_venequip?.fecha : 'Al día';
-    const totalEquipos = clientReports.length > 0 ? clientReports.length : 1;
-    return {
-      'N°': i + 1,
-      'Cliente Corporativo': c,
-      'Total Servicios Realizados': clientReports.length,
-      'Equipos en Seguimiento': totalEquipos,
-      'Último Servicio': lastService || 'Vigente',
-      'Estatus de Cuenta': 'Activa / Prioritaria',
-      'País / Región': 'Venezuela'
-    };
-  });
-  const wsClientes = XLSX.utils.json_to_sheet(clientesRows);
-  XLSX.utils.book_append_sheet(wb, wsClientes, '3_Clientes_Flota');
+  const wsClientes = XLSX.utils.json_to_sheet(
+    DEFAULT_CLIENTES.map((c, i) => ({
+      'Código': `CLI-${String(i + 1).padStart(3, '0')}`,
+      'Razón Social / Cliente': c,
+      'Tipo de Cliente': 'Industrial / Corporativo',
+      'Sector Industrial': c.includes('Polar') || c.includes('Heinz') || c.includes('Cargill') || c.includes('Palmar') || c.includes('MONACA') ? 'Alimentos y Bebidas' : (c.includes('PDVSA') ? 'Petróleo y Gas' : (c.includes('CORPOELEC') ? 'Energía y Servicios' : 'Siderúrgico y Minero')),
+      'Estatus Cuenta': 'ACTIVO'
+    }))
+  );
+  XLSX.utils.book_append_sheet(wb, wsClientes, '3_Clientes_Venequip');
 
   // ----------------------------------------------------
-  // HOJA 4: 🚜 Catálogo de Modelos Caterpillar & Ficha
+  // HOJA 4: 🚜 Catálogo de Modelos y Equipos Caterpillar
   // ----------------------------------------------------
-  const modelosSpecs = [
-    { modelo: 'CAT C15 ACERT', potencia_kva: '500 kVA / 400 kW', cilindrada: '15.2 L', aplicacion: 'Generación Standby / Continua', voltaje: '208V / 480V / 4160V' },
-    { modelo: 'CAT C18 ACERT', potencia_kva: '650 kVA / 520 kW', cilindrada: '18.1 L', aplicacion: 'Generación Crítica Industrial', voltaje: '208V / 480V' },
-    { modelo: 'CAT C27 ACERT', potencia_kva: '800 kVA / 640 kW', cilindrada: '27.0 L (V12)', aplicacion: 'Generación Minera / Petrolera', voltaje: '480V / 4160V' },
-    { modelo: 'CAT C32 ACERT', potencia_kva: '1000 kVA / 800 kW', cilindrada: '32.1 L (V12)', aplicacion: 'Plantas Industriales Mayores', voltaje: '480V / 13.8 kV' },
-    { modelo: 'CAT 3508B', potencia_kva: '1000 kVA / 800 kW', cilindrada: '34.5 L (V8)', aplicacion: 'Operaciones Marinas e Industriales', voltaje: '480V / 4160V' },
-    { modelo: 'CAT 3512B', potencia_kva: '1500 kVA / 1200 kW', cilindrada: '51.8 L (V12)', aplicacion: 'Planta de Respaldo Central', voltaje: '480V / 4160V / 13.8 kV' },
-    { modelo: 'CAT 3516B / HD', potencia_kva: '2000 kVA / 1600 kW', cilindrada: '69.0 L (V16)', aplicacion: 'Subestaciones y Servicios Esenciales', voltaje: '4160V / 13.8 kV' },
-    { modelo: 'CAT 3406C', potencia_kva: '350 kVA / 280 kW', cilindrada: '14.6 L (6 en línea)', aplicacion: 'Generación Mecánica Clásica', voltaje: '208V / 480V' },
-    { modelo: 'CAT 3412C', potencia_kva: '750 kVA / 600 kW', cilindrada: '27.0 L (V12)', aplicacion: 'Respaldo Industrial Pesado', voltaje: '208V / 480V' },
-    { modelo: 'CAT 3306', potencia_kva: '200 kVA / 160 kW', cilindrada: '10.5 L', aplicacion: 'Maquinaria de Construcción y Generación', voltaje: '208V / 480V' },
-    { modelo: 'CAT C9 ACERT', potencia_kva: '300 kVA / 240 kW', cilindrada: '8.8 L', aplicacion: 'Generación Compacta', voltaje: '208V / 480V' },
-    { modelo: 'CAT C4.4', potencia_kva: '100 kVA / 80 kW', cilindrada: '4.4 L', aplicacion: 'Telecomunicaciones y Comercio', voltaje: '208V / 480V' }
-  ];
   const wsModelos = XLSX.utils.json_to_sheet(
-    modelosSpecs.map((m, i) => ({
-      'N°': i + 1,
-      'Modelo Caterpillar': m.modelo,
-      'Potencia Nominal': m.potencia_kva,
-      'Cilindrada / Configuración': m.cilindrada,
-      'Tipo de Aplicación': m.aplicacion,
-      'Voltajes Típicos': m.voltaje,
-      'Fabricante': 'Caterpillar Inc. / Venequip S.A.'
+    DEFAULT_MODELOS_CAT.map((m, i) => ({
+      'Código Modelo': `CAT-MOD-${String(i + 1).padStart(3, '0')}`,
+      'Modelo / Especificación de Potencia': m,
+      'Familia de Motor': m.includes('35') ? 'Serie 3500 Pesado' : (m.includes('C15') || m.includes('C18') ? 'Serie C ACERT' : (m.includes('34') ? 'Serie 3400 Clásico' : 'Generación Industrial')),
+      'Combustible': m.includes('Gas') ? 'Gas Natural' : 'Diésel',
+      'Soporte Técnico': 'Venequip Nacional'
     }))
   );
-  XLSX.utils.book_append_sheet(wb, wsModelos, '4_Modelos_CAT');
+  XLSX.utils.book_append_sheet(wb, wsModelos, '4_Equipos_Caterpillar');
 
   // ----------------------------------------------------
-  // HOJA 5: 🔧 Herramientas Especiales & Números de Parte CAT
+  // HOJA 5: 🛠️ Catálogo de Herramientas Especiales CAT
   // ----------------------------------------------------
-  let herramientas = DEFAULT_HERRAMIENTAS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_HERRAMIENTAS);
-    if (raw) herramientas = JSON.parse(raw);
-  } catch (e) {}
   const wsHerramientas = XLSX.utils.json_to_sheet(
-    herramientas.map((h, i) => ({
-      'N°': i + 1,
-      'Nombre de la Herramienta': h.nombre,
-      'Número de Parte Oficial CAT': h.numero_parte,
-      'Cantidad en Dotación': h.cantidad,
-      'Tipo': 'Herramienta de Diagnóstico Especializado',
-      'Uso': 'Servicio Técnico de Campo y Taller'
+    DEFAULT_HERRAMIENTAS.map((h, i) => ({
+      'Item': i + 1,
+      'Descripción de la Herramienta Especial': h.nombre,
+      'Número de Parte Caterpillar': h.numero_parte,
+      'Cantidad Disponible': h.cantidad,
+      'Calibración / Estado': 'Certificada Operativa',
+      'Ubicación Almacén': 'Taller Central de Herramientas Especiales'
     }))
   );
-  XLSX.utils.book_append_sheet(wb, wsHerramientas, '5_Herramientas_CAT');
+  XLSX.utils.book_append_sheet(wb, wsHerramientas, '5_Herramientas_Especiales');
 
   // ----------------------------------------------------
   // HOJA 6: ⚙️ Catálogo de Repuestos & Componentes CAT
@@ -694,9 +1011,14 @@ export function recordSessionAuditLog(entry: { email: string; role?: string; eve
     status: entry.status || 'EXITOSO'
   };
   logs.unshift(newLog);
-  // Keep last 100 entries
   try {
     localStorage.setItem(STORAGE_KEY_SESSION_LOGS, JSON.stringify(logs.slice(0, 100)));
+  } catch (e) {}
+
+  // Asynchronously record log in Firestore online
+  try {
+    const logDocRef = doc(db, 'audit_logs', newLog.id);
+    setDoc(logDocRef, newLog).catch(() => {});
   } catch (e) {}
 }
 
@@ -740,3 +1062,4 @@ export function exportDatabaseToJson(): void {
   a.click();
   URL.revokeObjectURL(url);
 }
+

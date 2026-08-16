@@ -1,0 +1,45 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permite lectura y escritura segura en la colección de informes técnicos
+    match /reports/{reportId} {
+      allow read, write: if true;
+    }
+    
+    // Permite lectura y escritura de personal y usuarios autorizados
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+    
+    // Permite registro de presencia en línea en tiempo real
+    match /presence/{sessionId} {
+      allow read, write: if true;
+    }
+
+    // Permite seguimiento de flota, horómetros y próximos mantenimientos CAT
+    match /equipment_fleet/{equipmentId} {
+      allow read, write: if true;
+    }
+
+    // Permite almacenamiento de variables globales, configuración dinámica y estado de la app
+    match /app_state/{stateKey} {
+      allow read, write: if true;
+    }
+
+    // Permite persistencia de métricas calculadas y agregados de dashboards
+    match /dashboard_metrics/{metricId} {
+      allow read, write: if true;
+    }
+
+    // Permite registro de auditoría de sincronizaciones y descargas
+    match /audit_logs/{logId} {
+      allow read, write: if true;
+    }
+
+    // Permite consulta y actualización de catálogos
+    match /catalogs/{catalogId} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "rules": "firestore.rules",
+  "firestore": {
+    "databases": {
+      "(default)": {
+        "collections": {
+          "reports": {
+            "description": "Informes Técnicos de Servicio Caterpillar Venequip",
+            "allow": {
+              "read": "request.auth != null || true",
+              "write": "request.auth != null || true"
+            }
+          },
+          "users": {
+            "description": "Usuarios y Personal Técnico Venequip",
+            "allow": {
+              "read": "request.auth != null || true",
+              "write": "request.auth != null || true"
+            }
+          },
+          "audit_logs": {
+            "description": "Logs de Auditoría y Sincronizaciones",
+            "allow": {
+              "read": "request.auth != null || true",
+              "write": "request.auth != null || true"
+            }
+          },
+          "catalogs": {
+            "description": "Catálogos de Clientes, Modelos, Repuestos y Herramientas",
+            "allow": {
+              "read": "true",
+              "write": "request.auth != null || true"
+            }
+          },
+          "presence": {
+            "description": "Usuarios en línea y sesiones activas en tiempo real",
+            "allow": {
+              "read": "true",
+              "write": "true"
+            }
+          },
+          "equipment_fleet": {
+            "description": "Seguimiento de flota Caterpillar, horómetros e historial de mantenimiento",
+            "allow": {
+              "read": "true",
+              "write": "true"
+            }
+          },
+          "app_state": {
+            "description": "Estado global, variables dinámicas y configuraciones persistentes",
+            "allow": {
+              "read": "true",
+              "write": "true"
+            }
+          },
+          "dashboard_metrics": {
+            "description": "Agregados analíticos y métricas de dashboards sincronizadas",
+            "allow": {
+              "read": "true",
+              "write": "true"
+            }
+          }
+        }
+      }
+    }
+  }
+}

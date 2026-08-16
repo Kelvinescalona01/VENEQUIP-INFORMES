@@ -25,6 +25,8 @@ import { useAuth } from './AuthContext';
 import { uploadUsersRosterToDrive } from './googleWorkspace';
 import { 
   getLocalUsers, 
+  getRemoteUsers,
+  subscribeToUsers,
   saveLocalUsers, 
   exportDatabaseToExcel, 
   exportDatabaseToJson, 
@@ -81,29 +83,30 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/users');
-      const contentType = res.headers.get('content-type');
-      if (res.ok && contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.users)) {
-          setUsers(data.users);
-          saveLocalUsers(data.users);
-          return;
-        }
+      const remote = await getRemoteUsers();
+      if (remote && remote.length > 0) {
+        setUsers(remote);
+      } else {
+        const local = getLocalUsers();
+        setUsers(local);
       }
     } catch (err) {
-      // Fallback seamlessly to local database
+      const local = getLocalUsers();
+      setUsers(local);
     } finally {
       setLoading(false);
     }
-
-    const local = getLocalUsers();
-    setUsers(local);
   };
 
   useEffect(() => {
     if (isOpen) {
       fetchUsers();
+      const unsubscribe = subscribeToUsers((updatedUsers) => {
+        if (updatedUsers && updatedUsers.length > 0) {
+          setUsers(updatedUsers);
+        }
+      });
+      return () => unsubscribe();
     }
   }, [isOpen]);
 

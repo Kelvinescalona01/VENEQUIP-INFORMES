@@ -58,3 +58,83 @@ export interface InformeTecnico {
   bloque_firmas: BloqueFirmas;
   updatedAt?: string;
 }
+
+export interface OnlineUserPresence {
+  sessionId: string;
+  uid?: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'technician' | 'supervisor' | 'manager' | 'guest';
+  lastSeen: string; // ISO date
+  ip?: string;
+  currentView?: string;
+  currentReportId?: string;
+  device?: string;
+  isOnline: boolean;
+  avatarColor?: string;
+}
+
+export type MaintenanceLevel = 
+  | 'PM1' 
+  | 'PM2' 
+  | 'PM3' 
+  | 'PM4' 
+  | 'PM5' 
+  | 'OVERHAUL' 
+  | 'CORRECTIVO' 
+  | 'INSPECCION_TA1' 
+  | 'INSPECCION_TA2' 
+  | 'MUESTRAS_SOS';
+
+export interface MaintenanceIntervalConfig {
+  level: MaintenanceLevel;
+  hoursInterval: number; // e.g., 250, 500, 1000, 2000, 3000, 4000, 6000, 10000
+  title: string;
+  description: string;
+  itemsToCheck: string[];
+  recommendedParts: string[];
+  fluidSamples: string[]; // Aceite Motor SOS, Hidráulico, Transmisión, Refrigerante
+}
+
+export interface EquipmentFleetRecord {
+  equipmentKey: string; // e.g. "C15_CAT00C15J9K01234"
+  cliente: string;
+  modelo: string;
+  serial_equipo: string;
+  serial_motor?: string;
+  fabricante: string;
+  sucursal: string;
+  localizacion?: string;
+  lastHorometro: number;
+  lastHorometroDate: string;
+  lastMaintenanceType: MaintenanceLevel;
+  lastServiceNumber: string;
+  totalReportsCount: number;
+  nextRecommendedMaintenance: {
+    level: MaintenanceLevel;
+    targetHorometro: number;
+    hoursRemaining: number;
+    urgency: 'al_dia' | 'proximo' | 'vencido';
+    recommendedKit: string[];
+    fluidSamples: string[];
+    suggestedDateProjection?: string;
+    description: string;
+  };
+  maintenanceHistory: Array<{
+    fecha: string;
+    numeroServicio: string;
+    horometro: number;
+    tipoServicio: MaintenanceLevel;
+    actividad: string;
+    tecnico: string;
+    reportId?: string;
+  }>;
+  updatedAt: string;
+}
+
+export interface AppDynamicState {
+  key: string;
+  value: any;
+  updatedAt: string;
+  updatedBy?: string;
+}

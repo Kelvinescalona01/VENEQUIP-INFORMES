@@ -19,10 +19,14 @@ import {
   FileSpreadsheet, 
   Menu, 
   X, 
-  Layers
+  Layers,
+  Wrench
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { exportDatabaseToExcel } from './databaseManager';
+import { FirebaseStatusIndicator } from './FirebaseStatusIndicator';
+import { OnlinePresenceBadge } from './OnlinePresenceBadge';
+import { OnlineUserPresence } from './types';
 
 interface HeaderProps {
   onOpenAIModal: () => void;
@@ -35,8 +39,9 @@ interface HeaderProps {
   onResetDefault: () => void;
   onSaveDraft: () => void;
   isSaved: boolean;
-  activeView: 'editor' | 'preview' | 'dashboard';
-  setActiveView: (view: 'editor' | 'preview' | 'dashboard') => void;
+  activeView: 'editor' | 'preview' | 'fleet' | 'dashboard';
+  setActiveView: (view: 'editor' | 'preview' | 'fleet' | 'dashboard') => void;
+  onlineUsers?: OnlineUserPresence[];
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -52,6 +57,7 @@ export const Header: React.FC<HeaderProps> = ({
   isSaved,
   activeView,
   setActiveView,
+  onlineUsers = []
 }) => {
   const { user, userProfile, isAdmin, signOut } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -127,6 +133,21 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Vista Previa</span>
             </button>
 
+            {/* Predictive Maintenance & Fleet Tab */}
+            <button
+              id="btn-view-fleet"
+              onClick={() => setActiveView('fleet')}
+              className={`flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all min-h-[34px] cursor-pointer ${
+                activeView === 'fleet'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+                  : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/70'
+              }`}
+              title="Control de Flota y Ciclos de Mantenimiento Preventivo CAT (PM1, PM2, PM3, PM4)"
+            >
+              <Wrench className="w-3.5 h-3.5 text-amber-900" />
+              <span>Mantenimiento CAT</span>
+            </button>
+
             {/* DASHBOARD TAB: STRICTLY RESTRICTED TO ADMINISTRATORS */}
             {isAdmin && (
               <button
@@ -134,12 +155,12 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => setActiveView('dashboard')}
                 className={`flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg transition-all min-h-[34px] cursor-pointer ${
                   activeView === 'dashboard'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    ? 'bg-slate-900 text-amber-400 shadow-sm'
                     : 'text-amber-900 hover:text-slate-950 hover:bg-amber-200/70'
                 }`}
                 title="Panel de Métricas y Analíticas en Vivo (Exclusivo Administradores)"
               >
-                <BarChart3 className="w-3.5 h-3.5 text-amber-950" />
+                <BarChart3 className="w-3.5 h-3.5 text-amber-500" />
                 <span>Dashboards</span>
               </button>
             )}
@@ -148,6 +169,12 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Right Action Controls */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             
+            {/* Live Persistent Firebase Connection Indicator */}
+            <FirebaseStatusIndicator />
+
+            {/* Live Online Presence Indicator */}
+            <OnlinePresenceBadge onlineUsers={onlineUsers} />
+
             {/* AI Assistant Button */}
             <button
               id="btn-ai-process"
@@ -355,13 +382,13 @@ export const Header: React.FC<HeaderProps> = ({
           <div ref={mobileNavRef} className="md:hidden border-t border-slate-200 py-3 space-y-3 animate-in slide-in-from-top-2 duration-150">
             
             {/* View Switcher on Mobile */}
-            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
               <button
                 onClick={() => {
                   setActiveView('editor');
                   setShowMobileNav(false);
                 }}
-                className={`flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${
+                className={`flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-lg transition-all ${
                   activeView === 'editor' ? 'bg-slate-900 text-white' : 'text-slate-700'
                 }`}
               >
@@ -373,12 +400,24 @@ export const Header: React.FC<HeaderProps> = ({
                   setActiveView('preview');
                   setShowMobileNav(false);
                 }}
-                className={`flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${
+                className={`flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-lg transition-all ${
                   activeView === 'preview' ? 'bg-slate-900 text-white' : 'text-slate-700'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
                 <span>Vista Previa</span>
+              </button>
+              <button
+                onClick={() => {
+                  setActiveView('fleet');
+                  setShowMobileNav(false);
+                }}
+                className={`flex items-center justify-center gap-1 py-2 text-xs font-black rounded-lg transition-all ${
+                  activeView === 'fleet' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-amber-900'
+                }`}
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                <span>Mantenimiento</span>
               </button>
             </div>
 

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { InformeTecnico } from './types';
+import { InformeTecnico, OnlineUserPresence, EquipmentFleetRecord } from './types';
 import { DEFAULT_REPORT, SAMPLE_REPORT } from './defaultReport';
 import { normalizeReport } from './reportUtils';
 import { Header } from './Header';
 import { ReportEditor } from './ReportEditor';
 import { ReportPreview } from './ReportPreview';
+import { PredictiveMaintenanceView } from './PredictiveMaintenanceView';
 import { AIAnalyzerModal } from './AIAnalyzerModal';
 import { SignatureCanvasModal } from './SignatureCanvasModal';
 import { ExportModal } from './ExportModal';
@@ -17,6 +18,23 @@ import { LoginScreen } from './LoginScreen';
 import { exportDocumentToPDF } from './pdfExporter';
 import { uploadExcelReportToDrive } from './googleWorkspace';
 import { 
+  saveStoredReport, 
+  seedAllDataToFirebase, 
+  subscribeToReports, 
+  subscribeToUsers,
+  getStoredReports,
+  getRemoteUsers
+} from './databaseManager';
+import { 
+  startPresenceHeartbeat, 
+  subscribeToOnlinePresence, 
+  saveAppStateToFirestore, 
+  subscribeToFleetState, 
+  saveFleetToFirestore, 
+  getCachedOnlineUsers 
+} from './presenceManager';
+import { buildFleetFromReports } from './catMaintenanceEngine';
+import { 
   AlertCircle, 
   CheckCircle2, 
   Sparkles, 
@@ -27,13 +45,17 @@ import {
   FileSpreadsheet, 
   Check,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  Wrench
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
+import { useFirebaseConnection } from './FirebaseConnectionContext';
 import { analyzeReportUniversal, polishSectionUniversal } from './geminiService';
+import { WifiOff, RefreshCw, AlertTriangle } from 'lucide-react';
 
 export default function App() {
   const { user, userProfile, isAuthenticated, isAdmin, accessToken, loading } = useAuth();
+  const { status: firebaseStatus, isOnline, pendingSyncCount, reconnectNow } = useFirebaseConnection();
 
   const [report, setReport] = useState<InformeTecnico>(() => {
     const saved = localStorage.getItem('venequip_report_draft');
@@ -51,10 +73,24 @@ export default function App() {
     return normalizeReport(DEFAULT_REPORT);
   });
 
-  const [activeView, setActiveView] = useState<'editor' | 'preview' | 'dashboard'>('editor');
+  const [activeView, setActiveView] = useState<'editor' | 'preview' | 'fleet' | 'dashboard'>('editor');
   const [isSaved, setIsSaved] = useState(true);
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   
+  // Real-time Online Users Presence
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUserPresence[]>(() => getCachedOnlineUsers());
+
+  // Equipment Fleet for Caterpillar Predictive Maintenance
+  const [fleet, setFleet] = useState<EquipmentFleetRecord[]>(() => {
+    const cached = localStorage.getItem('venequip_equipment_fleet_cache');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return [];
+  });
+
   // Auto-drive upload state indicator
   const [driveSyncStatus, setDriveSyncStatus] = useState<'idle' | 'saving' | 'synced' | 'offline'>('idle');
 
@@ -77,9 +113,97 @@ export default function App() {
     setTimeout(() => setToastMsg(null), 4000);
   };
 
-  // Automated background save to Cloud SQL and Google Drive (Excel)
+  // Synchronize and seed Firebase on application startup
+  useEffect(() => {
+    const initFirebaseData = async () => {
+      try {
+        await seedAllDataToFirebase();
+        await getRemoteUsers();
+        const initialReports = await getStoredReports();
+        
+        // Build fleet from initial reports if available
+        if (initialReports && initialReports.length > 0) {
+          const generatedFleet = buildFleetFromReports(initialReports);
+          setFleet(generatedFleet);
+          saveFleetToFirestore(generatedFleet);
+        }
+      } catch (err) {
+        console.log('Initial sync notice:', err);
+      }
+    };
+    initFirebaseData();
+
+    // Listen to real-time updates for reports and users from Cloud Firestore
+    const unsubReports = subscribeToReports((updatedReports) => {
+      console.log('Real-time reports updated from Firebase:', updatedReports.length);
+      if (updatedReports && updatedReports.length > 0) {
+        const updatedFleet = buildFleetFromReports(updatedReports);
+        setFleet(updatedFleet);
+        saveFleetToFirestore(updatedFleet);
+      }
+    });
+
+    const unsubUsers = subscribeToUsers((updatedUsers) => {
+      console.log('Real-time users updated from Firebase:', updatedUsers.length);
+    });
+
+    // Real-time Online Users Presence Listener
+    const unsubPresence = subscribeToOnlinePresence((users) => {
+      setOnlineUsers(users);
+    });
+
+    // Real-time Fleet State Listener
+    const unsubFleet = subscribeToFleetState((fleetRecords) => {
+      if (fleetRecords && fleetRecords.length > 0) {
+        setFleet(fleetRecords);
+      }
+    });
+
+    return () => {
+      unsubReports();
+      unsubUsers();
+      unsubPresence();
+      unsubFleet();
+    };
+  }, []);
+
+  // Real-time Online User Presence Heartbeat when authenticated
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    const cleanupHeartbeat = startPresenceHeartbeat(
+      {
+        email: user.email || '',
+        name: userProfile?.name || user.displayName || user.email?.split('@')[0] || 'Técnico Venequip',
+        role: userProfile?.role || (isAdmin ? 'admin' : 'technician'),
+        uid: user.uid
+      },
+      () => activeView,
+      () => report.encabezado_venequip?.numero_servicio || ''
+    );
+
+    // Save active user view state to Firestore automatically
+    saveAppStateToFirestore('active_session_view', {
+      userEmail: user.email,
+      activeView,
+      lastActive: new Date().toISOString()
+    });
+
+    return () => {
+      cleanupHeartbeat();
+    };
+  }, [isAuthenticated, user, userProfile, isAdmin, activeView, report.encabezado_venequip?.numero_servicio]);
+
+  // Automated background save to Cloud Firestore, Cloud SQL and Google Drive (Excel)
   const syncReportBackground = async (currentReport: InformeTecnico) => {
-    // 1. Save to Cloud SQL
+    // 1. Save to Cloud Firestore & local resilience engine
+    try {
+      await saveStoredReport(currentReport);
+    } catch (fsErr) {
+      console.warn('Auto-save to Firestore:', fsErr);
+    }
+
+    // 2. Save to Express / Cloud SQL API
     try {
       await fetch('/api/reports', {
         method: 'POST',
@@ -274,6 +398,32 @@ export default function App() {
         activeView={activeView}
         setActiveView={setActiveView}
       />
+
+      {/* Offline Mode Persistent Resilience Banner */}
+      {(firebaseStatus === 'disconnected' || !isOnline) && (
+        <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-bold border-b border-amber-600 shadow-md no-print flex items-center justify-between">
+          <div className="max-w-7xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <WifiOff className="w-4 h-4 text-slate-950 shrink-0" />
+              <span>
+                <strong>Modo Offline Activo:</strong> Se perdió la conexión con Firebase Firestore. Puedes seguir redactando y editando normalmente; tus cambios se guardan en tu equipo y se sincronizarán solos con la nube al reconectar.
+              </span>
+              {pendingSyncCount > 0 && (
+                <span className="bg-slate-900 text-amber-400 px-2 py-0.5 rounded-full text-[10px] font-black shrink-0">
+                  {pendingSyncCount} {pendingSyncCount === 1 ? 'pendiente' : 'pendientes'}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => reconnectNow()}
+              className="bg-slate-950 hover:bg-slate-900 text-white text-[11px] px-3 py-1 rounded-lg font-black shrink-0 flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3 text-amber-400" />
+              <span>Reintentar Conexión</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Auto-Drive Sync Floating Status Bar */}
       {accessToken && (

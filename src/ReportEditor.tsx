@@ -17,8 +17,16 @@ import {
   Upload,
   RefreshCw,
   Eraser,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Zap,
+  CheckCircle2,
+  Sliders
 } from 'lucide-react';
+import { 
+  calculateNextCATMaintenance, 
+  CAT_MAINTENANCE_CONFIGS, 
+  detectMaintenanceLevelFromText 
+} from './catMaintenanceEngine';
 
 interface ReportEditorProps {
   report: InformeTecnico;
@@ -586,6 +594,87 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
             </div>
 
           </div>
+
+          {/* Caterpillar Predictive Maintenance Intelligent Assistant */}
+          {(() => {
+            const rawHrs = parseFloat(String(report.encabezado_venequip.horas_motor || '0').replace(/[^0-9.]/g, '')) || 0;
+            if (rawHrs <= 0) return null;
+            const pred = calculateNextCATMaintenance(rawHrs);
+            const config = CAT_MAINTENANCE_CONFIGS[pred.level];
+
+            return (
+              <div className="mt-4 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-400/40 rounded-xl p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-amber-500 text-slate-950 rounded-lg font-black">
+                      <Zap className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 block">
+                        Diagnóstico Predictivo Caterpillar Venequip
+                      </span>
+                      <h4 className="text-xs font-black text-slate-900">
+                        Próximo Servicio Sugerido: <span className="text-amber-700">{config?.title || pred.level}</span>
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700">
+                      Horómetro Meta: <strong className="text-slate-900">{pred.targetHorometro.toLocaleString('es-VE')} hrs</strong>
+                    </span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                      pred.urgency === 'vencido' 
+                        ? 'bg-rose-100 text-rose-800' 
+                        : pred.urgency === 'proximo' 
+                        ? 'bg-amber-100 text-amber-800' 
+                        : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      {pred.urgency === 'vencido' ? '¡Vencido!' : pred.urgency === 'proximo' ? '¡Próximo!' : 'Al Día'}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {pred.description} (Margen: <strong>{pred.hoursRemaining} hrs</strong> • Proyección estimada: <strong>{pred.suggestedDateProjection}</strong>)
+                </p>
+
+                <div className="pt-2 border-t border-amber-200/60 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-[11px] text-slate-600">
+                    <strong className="text-slate-800">Kits recomendados:</strong> {config?.recommendedParts.slice(0, 2).join(', ')}...
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newActividad = `MANTENIMIENTO PREVENTIVO PROGRAMADO ${pred.level} (${config?.hoursInterval || 250} HORAS)`;
+                      const newSol = `Se solicita a Consorcio Venequip S.A. la ejecución del servicio de mantenimiento preventivo ${pred.level} para el equipo ${report.encabezado_venequip.modelo || 'Caterpillar'} (Serial: ${report.encabezado_venequip.serial_equipo || 'N/A'}) con horómetro de ${rawHrs} horas acumuladas.`;
+                      const newRec = `1. Ejecutar el protocolo estándar de mantenimiento preventivo ${pred.level} a las ${pred.targetHorometro} horas.\n2. Sustituir los kits de filtros recomendados por el fabricante: ${config?.recommendedParts.join(', ')}.\n3. Tomar muestras de fluidos SOS (${config?.fluidSamples.join(', ')}).\n4. Próxima inspección programada a las ${pred.targetHorometro + 250} horas.`;
+                      
+                      onChange({
+                        ...report,
+                        encabezado_venequip: {
+                          ...report.encabezado_venequip,
+                          actividad: newActividad
+                        },
+                        secciones_informe: {
+                          ...report.secciones_informe,
+                          "1_solicitud_cliente": report.secciones_informe["1_solicitud_cliente"] || newSol,
+                          "6_conclusiones_recomendaciones": report.secciones_informe["6_conclusiones_recomendaciones"] 
+                            ? `${report.secciones_informe["6_conclusiones_recomendaciones"]}\n\n[PLAN PREVENTIVO CAT ${pred.level}]:\n${newRec}`
+                            : newRec
+                        }
+                      });
+                    }}
+                    className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Aplicar Plan {pred.level} al Informe</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
