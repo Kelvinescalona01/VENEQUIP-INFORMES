@@ -67,6 +67,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             parsed.name = 'KELVIN ESCALONA';
             parsed.role = 'admin';
             localStorage.setItem('venequip_auth_user', JSON.stringify(parsed));
+          } else if (emailLower === 'mlinares@ccvenequip.com') {
+            parsed.name = 'M. LINARES';
+            parsed.role = 'admin';
+            localStorage.setItem('venequip_auth_user', JSON.stringify(parsed));
           }
           setUserProfile(parsed);
           setUser({
@@ -217,8 +221,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAdmin = 
     userProfile?.role === 'admin' || 
     userProfile?.email?.toLowerCase() === 'kescalonaccv@gmail.com' ||
+    userProfile?.email?.toLowerCase() === 'mlinares@ccvenequip.com' ||
     userProfile?.email?.toLowerCase() === 'escalonabyby08@gmail.com' ||
     user?.email?.toLowerCase() === 'kescalonaccv@gmail.com' ||
+    user?.email?.toLowerCase() === 'mlinares@ccvenequip.com' ||
     user?.email?.toLowerCase() === 'escalonabyby08@gmail.com';
 
   const isAuthenticated = !!userProfile;

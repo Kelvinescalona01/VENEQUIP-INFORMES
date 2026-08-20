@@ -4,6 +4,7 @@ import { normalizeReport } from './reportUtils';
 import { convertUrlToBase64DataUrl } from './imageUtils';
 import { getSampleInspectionPhoto1, getSampleInspectionPhoto2 } from './sampleImages';
 import { getDefaultSignatureDataUrl } from './logoUtils';
+import { optimizeImageFast, WatermarkOptions } from './turboImageProcessor';
 import { 
   Sparkles, 
   Plus, 
@@ -20,7 +21,13 @@ import {
   Link as LinkIcon,
   Zap,
   CheckCircle2,
-  Sliders
+  Sliders,
+  Cpu,
+  FlaskConical,
+  Mic,
+  Layers,
+  Stamp,
+  Check
 } from 'lucide-react';
 import { 
   calculateNextCATMaintenance, 
@@ -34,6 +41,11 @@ interface ReportEditorProps {
   onOpenSignatureCanvas: (role: 'elaborado_por' | 'revisado_por' | 'aprobado_por') => void;
   onPolishSection: (sectionName: string, currentText: string, callback: (newText: string) => void) => void;
   isPolishingSection?: string | null;
+  onOpenDtcModal?: () => void;
+  onOpenSosModal?: () => void;
+  onOpenGenCalcModal?: () => void;
+  onOpenVoiceModal?: () => void;
+  onOpenTemplatesModal?: () => void;
 }
 
 export const ReportEditor: React.FC<ReportEditorProps> = ({
@@ -41,10 +53,17 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
   onChange,
   onOpenSignatureCanvas,
   onPolishSection,
-  isPolishingSection
+  isPolishingSection,
+  onOpenDtcModal,
+  onOpenSosModal,
+  onOpenGenCalcModal,
+  onOpenVoiceModal,
+  onOpenTemplatesModal
 }) => {
   const report = normalizeReport(rawReport);
   const [activeTab, setActiveTab] = useState<'encabezado' | 'secciones' | 'herramientas' | 'fotografico' | 'firmas'>('encabezado');
+  const [autoWatermark, setAutoWatermark] = useState(true);
+  const [isOptimizingPhotos, setIsOptimizingPhotos] = useState(false);
 
   // Helpers for clear functions
   const handleClearHeader = () => {
@@ -247,42 +266,48 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
     handleSectionChange('7_registro_fotografico', updated);
   };
 
-  const handlePhotoFileUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoFileUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     const fileList: File[] = Array.from(files);
-    let loadedCount = 0;
-    const newBase64s: string[] = [];
+    setIsOptimizingPhotos(true);
 
-    fileList.forEach((file: File) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          newBase64s.push(event.target.result as string);
-        }
-        loadedCount++;
-        if (loadedCount === fileList.length) {
-          const updated = [...report.secciones_informe["7_registro_fotografico"]];
-          const current = updated[index];
-          const currentImgs = current.imagenes && current.imagenes.length > 0 
-            ? [...current.imagenes] 
-            : (current.url_o_base64 ? [current.url_o_base64] : []);
-          
-          const combined = [...currentImgs, ...newBase64s];
-          updated[index] = {
-            ...current,
-            url_o_base64: combined[0] || '',
-            imagenes: combined
-          };
-          handleSectionChange('7_registro_fotografico', updated);
-        }
+    try {
+      const watermarkOpt: WatermarkOptions | undefined = autoWatermark ? {
+        serviceNumber: report.encabezado_venequip.numero_servicio,
+        equipmentModel: report.encabezado_venequip.modelo || 'CATERPILLAR',
+        equipmentSerial: report.encabezado_venequip.serial_equipo || 'N/A',
+        horometro: report.encabezado_venequip.horas_motor,
+        date: report.encabezado_venequip.fecha,
+        clientName: report.encabezado_venequip.cliente
+      } : undefined;
+
+      const newBase64s: string[] = [];
+      for (const file of fileList) {
+        const optimized = await optimizeImageFast(file, 1600, 1200, 0.82, watermarkOpt);
+        newBase64s.push(optimized);
+      }
+
+      const updated = [...report.secciones_informe["7_registro_fotografico"]];
+      const current = updated[index];
+      const currentImgs = current.imagenes && current.imagenes.length > 0 
+        ? [...current.imagenes] 
+        : (current.url_o_base64 ? [current.url_o_base64] : []);
+      
+      const combined = [...currentImgs, ...newBase64s];
+      updated[index] = {
+        ...current,
+        url_o_base64: combined[0] || '',
+        imagenes: combined
       };
-      reader.readAsDataURL(file);
-    });
-
-    // Reset input value so same files can be re-selected if needed
-    e.target.value = '';
+      handleSectionChange('7_registro_fotografico', updated);
+    } catch (err) {
+      console.error('Error optimizing photos:', err);
+    } finally {
+      setIsOptimizingPhotos(false);
+      e.target.value = '';
+    }
   };
 
   // Helpers for Signatures
@@ -346,6 +371,90 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
   return (
     <div id="report-editor-container" className="space-y-6">
       
+      {/* CATERPILLAR INTELLIGENCE & PRODUCTIVITY TOOLBAR */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-md flex flex-wrap items-center justify-between gap-3 text-white">
+        <div className="flex items-center space-x-2.5">
+          <div className="p-2 bg-amber-500 rounded-xl text-slate-950 shadow-sm font-black">
+            <Cpu className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-black text-white uppercase tracking-wider">
+                Suite de Ingeniería Caterpillar
+              </span>
+              <span className="bg-amber-500/20 text-amber-300 text-[10px] font-black px-2 py-0.2 rounded-full border border-amber-500/30">
+                Turbo 2026
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Herramientas de diagnóstico asistido, laboratorio de fluidos, cálculo eléctrico y dictado
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {onOpenTemplatesModal && (
+            <button
+              type="button"
+              onClick={onOpenTemplatesModal}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              title="Cargar protocolos oficiales CAT PM1, PM2, PM3, PM4 o Banco de Carga"
+            >
+              <Layers className="w-3.5 h-3.5 text-amber-400" />
+              <span>Plantillas CAT</span>
+            </button>
+          )}
+
+          {onOpenDtcModal && (
+            <button
+              type="button"
+              onClick={onOpenDtcModal}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              title="Decodificador de Códigos de Falla MID, CID y FMI (CAT ET)"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <span>Códigos DTC</span>
+            </button>
+          )}
+
+          {onOpenSosModal && (
+            <button
+              type="button"
+              onClick={onOpenSosModal}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              title="Laboratorio y Evaluación Espectrométrica de Fluidos S.O.S."
+            >
+              <FlaskConical className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Laboratorio S.O.S.</span>
+            </button>
+          )}
+
+          {onOpenGenCalcModal && (
+            <button
+              type="button"
+              onClick={onOpenGenCalcModal}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              title="Calculadora de Carga, Potencia kW/kVA, Consumo Diésel y Derating"
+            >
+              <Sliders className="w-3.5 h-3.5 text-blue-400" />
+              <span>Calculadora Eléctrica</span>
+            </button>
+          )}
+
+          {onOpenVoiceModal && (
+            <button
+              type="button"
+              onClick={onOpenVoiceModal}
+              className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Dictado por Voz con Terminología Técnica Caterpillar"
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>Dictado por Voz</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Clean Tab Controls */}
       <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap gap-2">
         <button
@@ -985,7 +1094,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
       {/* TAB 4: REGISTRO FOTOGRÁFICO */}
       {activeTab === 'fotografico' && (
         <div id="section-editor-fotografico" className="bg-white border border-slate-200 rounded-2xl p-6 space-y-6 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 gap-3">
             <div>
               <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <ImageIcon className="w-5 h-5 text-amber-500" />
@@ -993,11 +1102,33 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
               </h2>
               <p className="text-xs text-slate-500 font-medium">Capturas de mediciones, placas de motor, tablero de control y conexiones</p>
             </div>
-            <div className="flex items-center gap-2">
+            
+            <div className="flex flex-wrap items-center gap-2">
+              <label 
+                className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-800 cursor-pointer transition select-none"
+                title="Estampar membrete técnico oficial con Modelo, Serial, N° Servicio y Fecha en cada foto"
+              >
+                <input 
+                  type="checkbox"
+                  checked={autoWatermark}
+                  onChange={(e) => setAutoWatermark(e.target.checked)}
+                  className="rounded text-amber-500 focus:ring-amber-400"
+                />
+                <Stamp className="w-3.5 h-3.5 text-amber-600" />
+                <span>Estampado Técnico ISO</span>
+              </label>
+
+              {isOptimizingPhotos && (
+                <div className="flex items-center space-x-1.5 bg-amber-100 text-amber-900 px-3 py-1.5 rounded-xl text-xs font-black animate-pulse border border-amber-300">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Procesando Fotos Ultra-Rápido...</span>
+                </div>
+              )}
+
               <button
                 id="btn-clear-photos"
                 onClick={handleClearPhotos}
-                className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors border border-rose-200 font-bold"
+                className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors border border-rose-200 font-bold cursor-pointer"
                 title="Vaciar todo el registro fotográfico"
               >
                 <Eraser className="w-3.5 h-3.5" />
@@ -1006,7 +1137,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
               <button
                 id="btn-add-photo"
                 onClick={handleAddPhoto}
-                className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-all"
+                className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Agregar Imagen</span>

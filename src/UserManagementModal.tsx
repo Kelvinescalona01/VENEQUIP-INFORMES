@@ -628,7 +628,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                             <KeyRound className="h-4 w-4 text-amber-600" />
                           </button>
                         )}
-                        {u.email.toLowerCase() !== 'kescalonaccv@gmail.com' && (
+                        {!['kescalonaccv@gmail.com', 'mlinares@ccvenequip.com', 'escalonabyby08@gmail.com'].includes(u.email.toLowerCase()) && (
                           <button
                             onClick={() => handleDeleteUser(u.id, u.name)}
                             className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"

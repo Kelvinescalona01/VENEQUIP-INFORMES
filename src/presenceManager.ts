@@ -293,3 +293,48 @@ export function subscribeToAppState<T = any>(
     return () => {};
   }
 }
+
+// Alias for online presence subscription
+export const subscribeToOnlinePresence = subscribeToOnlineUsers;
+
+/**
+ * Saves equipment fleet records into Cloud Firestore for persistent predictive maintenance tracking
+ */
+export async function saveFleetToFirestore(fleet: any[]): Promise<void> {
+  if (!fleet) return;
+  try {
+    const fleetDocRef = doc(db, 'app_state', 'caterpillar_fleet_registry');
+    await setDoc(fleetDocRef, {
+      key: 'caterpillar_fleet_registry',
+      value: fleet,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    localStorage.setItem('venequip_equipment_fleet_cache', JSON.stringify(fleet));
+  } catch (err) {
+    console.warn('Error saving fleet to Firestore:', err);
+    localStorage.setItem('venequip_equipment_fleet_cache', JSON.stringify(fleet));
+  }
+}
+
+/**
+ * Subscribes to real-time Caterpillar Fleet updates
+ */
+export function subscribeToFleetState(onUpdate: (fleet: any[]) => void): () => void {
+  try {
+    const fleetDocRef = doc(db, 'app_state', 'caterpillar_fleet_registry');
+    return onSnapshot(fleetDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as AppDynamicState;
+        if (data && Array.isArray(data.value)) {
+          localStorage.setItem('venequip_equipment_fleet_cache', JSON.stringify(data.value));
+          onUpdate(data.value);
+        }
+      }
+    }, (err) => {
+      console.warn('Fleet subscription notice:', err);
+    });
+  } catch (e) {
+    return () => {};
+  }
+}
+

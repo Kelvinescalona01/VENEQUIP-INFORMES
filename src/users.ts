@@ -37,7 +37,7 @@ export async function authenticateUserWithPassword(email: string, password: stri
         }
 
         const storedPass = (user.password || '').trim();
-        const isMaster = cleanEmail === 'kescalonaccv@gmail.com' || cleanEmail === 'escalonabyby08@gmail.com';
+        const isMaster = cleanEmail === 'kescalonaccv@gmail.com' || cleanEmail === 'mlinares@ccvenequip.com' || cleanEmail === 'escalonabyby08@gmail.com';
         const isMasterPass = cleanPassword === 'admin' || cleanPassword === 'admin1234' || cleanPassword === 'venequip2026';
 
         if (!storedPass || (storedPass !== cleanPassword && !(isMaster && isMasterPass))) {
@@ -67,7 +67,7 @@ export async function authenticateUserWithPassword(email: string, password: stri
     }
 
     const storedPass = (foundUser.password || '').trim();
-    const isMaster = cleanEmail === 'kescalonaccv@gmail.com' || cleanEmail === 'escalonabyby08@gmail.com';
+    const isMaster = cleanEmail === 'kescalonaccv@gmail.com' || cleanEmail === 'mlinares@ccvenequip.com' || cleanEmail === 'escalonabyby08@gmail.com';
     const isMasterPass = cleanPassword === 'admin' || cleanPassword === 'admin1234' || cleanPassword === 'venequip2026';
 
     if (storedPass && storedPass !== cleanPassword && !(isMaster && isMasterPass)) {
@@ -78,13 +78,13 @@ export async function authenticateUserWithPassword(email: string, password: stri
   }
 
   // Fallback check if user is Master Admin
-  if ((cleanEmail === 'kescalonaccv@gmail.com' || cleanEmail === 'escalonabyby08@gmail.com') && 
+  if ((cleanEmail === 'kescalonaccv@gmail.com' || cleanEmail === 'mlinares@ccvenequip.com' || cleanEmail === 'escalonabyby08@gmail.com') && 
       (cleanPassword === 'admin' || cleanPassword === 'admin1234' || cleanPassword === 'venequip2026')) {
     return {
-      id: 1,
+      id: cleanEmail === 'mlinares@ccvenequip.com' ? 2 : 1,
       uid: `admin_${cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`,
       email: cleanEmail,
-      name: 'KELVIN ESCALONA',
+      name: cleanEmail === 'mlinares@ccvenequip.com' ? 'M. LINARES' : 'KELVIN ESCALONA',
       role: 'admin',
       status: 'active',
       specialty: 'Administrador General del Sistema',
@@ -92,15 +92,23 @@ export async function authenticateUserWithPassword(email: string, password: stri
     };
   }
 
-  throw new Error('El correo ingresado no está registrado en el sistema. Solicite al Administrador (KELVIN ESCALONA) la creación de su cuenta.');
+  throw new Error('El correo ingresado no está registrado en el sistema. Solicite al Administrador (KELVIN ESCALONA o M. LINARES) la creación de su cuenta.');
 }
 
 /**
- * Ensures required seed accounts exist
+ * Ensures required seed accounts exist and removes deprecated accounts
  */
 export async function ensureDefaultUsers(): Promise<void> {
   const store = getStore();
   let updated = false;
+
+  // Remove any legacy demo accounts that are no longer wanted
+  const legacyEmailsToRemove = ['supervisor@venequip.com', 'gerencia@venequip.com', 'tecnico@venequip.com'];
+  const initialLength = store.users.length;
+  store.users = store.users.filter(u => !legacyEmailsToRemove.includes(u.email.toLowerCase()));
+  if (store.users.length !== initialLength) {
+    updated = true;
+  }
 
   // 1. Master Admin 1 (Kelvin Escalona primary)
   const admin1Email = 'kescalonaccv@gmail.com';
@@ -110,7 +118,7 @@ export async function ensureDefaultUsers(): Promise<void> {
       id: 1,
       uid: 'admin_kescalonaccv',
       email: admin1Email,
-      password: 'admin1234',
+      password: 'admin',
       name: 'KELVIN ESCALONA',
       role: 'admin',
       status: 'active',
@@ -124,20 +132,47 @@ export async function ensureDefaultUsers(): Promise<void> {
     store.users[admin1Idx].name = 'KELVIN ESCALONA';
     store.users[admin1Idx].status = 'active';
     if (!store.users[admin1Idx].password) {
-      store.users[admin1Idx].password = 'admin1234';
+      store.users[admin1Idx].password = 'admin';
       updated = true;
     }
   }
 
-  // 2. Master Admin 2 (Kelvin Escalona secondary / AI Studio session)
-  const admin2Email = 'escalonabyby08@gmail.com';
+  // 2. Master Admin 2 (M. Linares)
+  const admin2Email = 'mlinares@ccvenequip.com';
   const admin2Idx = store.users.findIndex(u => u.email.toLowerCase() === admin2Email);
   if (admin2Idx === -1) {
-    store.users.unshift({
-      id: 10,
-      uid: 'admin_escalonabyby08',
+    store.users.splice(1, 0, {
+      id: 2,
+      uid: 'admin_mlinares',
       email: admin2Email,
-      password: 'admin1234',
+      password: 'admin',
+      name: 'M. LINARES',
+      role: 'admin',
+      status: 'active',
+      specialty: 'Administrador Principal de Operaciones y Servicios',
+      phone: '+58 414 7654321',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    updated = true;
+  } else {
+    store.users[admin2Idx].role = 'admin';
+    store.users[admin2Idx].name = 'M. LINARES';
+    store.users[admin2Idx].status = 'active';
+    if (!store.users[admin2Idx].password) {
+      store.users[admin2Idx].password = 'admin';
+      updated = true;
+    }
+  }
+
+  // 3. Master Admin 3 (Session Admin / AI Studio)
+  const admin3Email = 'escalonabyby08@gmail.com';
+  const admin3Idx = store.users.findIndex(u => u.email.toLowerCase() === admin3Email);
+  if (admin3Idx === -1) {
+    store.users.splice(2, 0, {
+      id: 3,
+      uid: 'admin_escalonabyby08',
+      email: admin3Email,
+      password: 'admin',
       name: 'KELVIN ESCALONA',
       role: 'admin',
       status: 'active',
@@ -147,70 +182,40 @@ export async function ensureDefaultUsers(): Promise<void> {
     });
     updated = true;
   } else {
-    store.users[admin2Idx].role = 'admin';
-    store.users[admin2Idx].name = 'KELVIN ESCALONA';
-    store.users[admin2Idx].status = 'active';
-    if (!store.users[admin2Idx].password) {
-      store.users[admin2Idx].password = 'admin1234';
+    store.users[admin3Idx].role = 'admin';
+    store.users[admin3Idx].name = 'KELVIN ESCALONA';
+    store.users[admin3Idx].status = 'active';
+    if (!store.users[admin3Idx].password) {
+      store.users[admin3Idx].password = 'admin';
       updated = true;
     }
   }
 
-  // 3. Demo Technician user
-  const techEmail = 'tecnico@venequip.com';
-  const techIdx = store.users.findIndex(u => u.email.toLowerCase() === techEmail);
-  if (techIdx === -1) {
+  // 4. Single Demo / Test Venequip User
+  const testEmail = 'prueba@venequip.com';
+  const testIdx = store.users.findIndex(u => u.email.toLowerCase() === testEmail);
+  if (testIdx === -1) {
     store.users.push({
-      id: 2,
-      uid: 'tech_venequip_sample',
-      email: techEmail,
-      password: 'tecnico2026',
-      name: 'Ing. Técnico Especialista Caterpillar',
+      id: 4,
+      uid: 'test_venequip_user',
+      email: testEmail,
+      password: 'venequip2026',
+      name: 'Usuario de Prueba Venequip',
       role: 'technician',
       status: 'active',
-      specialty: 'Especialista en Grupos Electrógenos Caterpillar',
+      specialty: 'Técnico Especialista de Pruebas Caterpillar',
       phone: '+58 412 9876543',
       createdAt: '2026-01-01T00:00:00.000Z',
     });
     updated = true;
-  }
-
-  // 4. Demo Supervisor user
-  const supEmail = 'supervisor@venequip.com';
-  const supIdx = store.users.findIndex(u => u.email.toLowerCase() === supEmail);
-  if (supIdx === -1) {
-    store.users.push({
-      id: 3,
-      uid: 'sup_venequip_sample',
-      email: supEmail,
-      password: 'supervisor2026',
-      name: 'Supervisor de Taller y Campo',
-      role: 'supervisor',
-      status: 'active',
-      specialty: 'Supervisión Técnica de Motores Mayores',
-      phone: '+58 416 5554321',
-      createdAt: '2026-01-01T00:00:00.000Z',
-    });
-    updated = true;
-  }
-
-  // 5. Demo Manager user
-  const mgrEmail = 'gerencia@venequip.com';
-  const mgrIdx = store.users.findIndex(u => u.email.toLowerCase() === mgrEmail);
-  if (mgrIdx === -1) {
-    store.users.push({
-      id: 4,
-      uid: 'mgr_venequip_sample',
-      email: mgrEmail,
-      password: 'gerencia2026',
-      name: 'Gerente de Sucursal y Operaciones',
-      role: 'manager',
-      status: 'active',
-      specialty: 'Gerencia de Soporte al Producto y Garantías',
-      phone: '+58 424 8887766',
-      createdAt: '2026-01-01T00:00:00.000Z',
-    });
-    updated = true;
+  } else {
+    store.users[testIdx].role = 'technician';
+    store.users[testIdx].name = 'Usuario de Prueba Venequip';
+    store.users[testIdx].status = 'active';
+    if (!store.users[testIdx].password) {
+      store.users[testIdx].password = 'venequip2026';
+      updated = true;
+    }
   }
 
   if (updated) {
@@ -241,16 +246,17 @@ export async function getOrCreateUser(uid: string, email: string, name?: string)
     return user;
   }
 
-  const isMasterAdmin = cleanEmail === 'kescalonaccv@gmail.com' || cleanEmail === 'escalonabyby08@gmail.com';
+  const isMasterAdmin = cleanEmail === 'kescalonaccv@gmail.com' || cleanEmail === 'mlinares@ccvenequip.com' || cleanEmail === 'escalonabyby08@gmail.com';
   const isFirstUser = store.users.length === 0;
 
   if (isMasterAdmin || isFirstUser) {
+    const defaultName = cleanEmail === 'mlinares@ccvenequip.com' ? 'M. LINARES' : 'KELVIN ESCALONA';
     const newUser = {
       id: store.users.length > 0 ? Math.max(...store.users.map(u => u.id)) + 1 : 1,
       uid,
       email: cleanEmail,
-      password: 'admin1234',
-      name: name || 'KELVIN ESCALONA',
+      password: 'admin',
+      name: name || defaultName,
       role: 'admin',
       status: 'active',
       specialty: 'Administrador General del Sistema',
@@ -262,7 +268,7 @@ export async function getOrCreateUser(uid: string, email: string, name?: string)
     return newUser;
   }
 
-  throw new Error(`Acceso no autorizado para ${cleanEmail}. Tu cuenta debe ser registrada previamente por el Administrador (KELVIN ESCALONA).`);
+  throw new Error(`Acceso no autorizado para ${cleanEmail}. Tu cuenta debe ser registrada previamente por el Administrador (KELVIN ESCALONA o M. LINARES).`);
 }
 
 export async function getAllUsers(): Promise<any[]> {
@@ -427,7 +433,13 @@ export async function changeUserPasswordByAdmin(
   }
 
   // Security check: If requesterEmail is provided, verify it is master admin or admin role
-  if (requesterEmail && requesterEmail.trim().toLowerCase() !== 'kescalonaccv@gmail.com') {
+  const isMasterRequester = requesterEmail && (
+    requesterEmail.trim().toLowerCase() === 'kescalonaccv@gmail.com' ||
+    requesterEmail.trim().toLowerCase() === 'mlinares@ccvenequip.com' ||
+    requesterEmail.trim().toLowerCase() === 'escalonabyby08@gmail.com'
+  );
+
+  if (requesterEmail && !isMasterRequester) {
     const requester = store.users.find(u => u.email.toLowerCase() === requesterEmail.trim().toLowerCase());
     if (!requester || requester.role !== 'admin') {
       throw new Error('Operación denegada: Solo el Administrador del Sistema puede cambiar contraseñas de usuarios.');

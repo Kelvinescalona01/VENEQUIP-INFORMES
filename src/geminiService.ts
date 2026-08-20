@@ -6,9 +6,10 @@ const GEMINI_API_KEY_DEFAULT = 'AQ.Ab8RN6LJaVCQbUBAcO61nesXjbDsMZu6UA2dMlZj8ASk2
 
 // Prioritized models
 const GEMINI_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.5-pro'
+  'gemini-3.7-flash',
+  'gemini-flash-latest',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash'
 ];
 
 /**
@@ -293,3 +294,156 @@ Por favor reelabora este texto al estándar de informe técnico Venequip:`;
   const result = await callGeminiRestDirect([{ text: prompt }], systemInstruction);
   return result.trim();
 }
+
+/**
+ * Executes a Python script on the server
+ */
+export async function executePythonCode(code: string): Promise<{
+  success: boolean;
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  executionTimeMs: number;
+  error?: string;
+}> {
+  try {
+    const res = await fetch('/api/run-python', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    return {
+      success: false,
+      stdout: '',
+      stderr: err.message || 'Error comunicando con el servidor Python.',
+      exitCode: 1,
+      executionTimeMs: 0,
+      error: err.message
+    };
+  }
+}
+
+/**
+ * Gemini Python Assistant: Generates Caterpillar and engineering calculations in Python
+ */
+export async function generateGeminiPython(
+  prompt: string,
+  equipmentContext?: any,
+  autoRun: boolean = true
+): Promise<{
+  success: boolean;
+  data?: {
+    title: string;
+    explanation: string;
+    pythonCode: string;
+    expectedOutcome: string;
+  };
+  executionResult?: {
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+    executionTimeMs: number;
+  };
+  error?: string;
+}> {
+  // 1. Try Backend Proxy
+  try {
+    const res = await fetch('/api/gemini-python', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, equipmentContext, autoRun }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        return data;
+      }
+    }
+  } catch (e) {
+    console.log('Backend /api/gemini-python unavailable, fallback to direct REST');
+  }
+
+  // 2. Direct Fallback if backend is unavailable
+  try {
+    const systemInstruction = `Eres un Ingeniero Electromecánico Senior y Desarrollador Python para Consorcio Venequip S.A. Genera scripts en Python 3 limpios y profesionales. Retorna un JSON con las claves: title, explanation, pythonCode, expectedOutcome.`;
+    const fullPrompt = `Genera un script en Python 3 para calcular: "${prompt}". Contexto: ${JSON.stringify(equipmentContext || {})}`;
+    
+    const responseText = await callGeminiRestDirect(
+      [{ text: fullPrompt }],
+      systemInstruction,
+      {
+        type: 'OBJECT',
+        properties: {
+          title: { type: 'STRING' },
+          explanation: { type: 'STRING' },
+          pythonCode: { type: 'STRING' },
+          expectedOutcome: { type: 'STRING' }
+        },
+        required: ['title', 'explanation', 'pythonCode', 'expectedOutcome']
+      }
+    );
+
+    const parsed = safeExtractJson(responseText);
+    return {
+      success: true,
+      data: parsed
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || 'Error al generar código Python con Gemini.'
+    };
+  }
+}
+
+/**
+ * Universal Gemini Technical Assistant Chat
+ */
+export async function chatGeminiUniversal(
+  message: string,
+  equipmentContext?: any,
+  imageBase64?: string
+): Promise<string> {
+  // 1. Try backend proxy
+  try {
+    const res = await fetch('/api/chat-gemini', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, equipmentContext, imageBase64 }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.reply) {
+        return data.reply;
+      }
+    }
+  } catch (e) {
+    console.log('Backend chat unavailable, fallback to browser REST');
+  }
+
+  // 2. Direct browser REST
+  const systemInstruction = `Eres el Asistente Inteligente de Ingeniería y Servicio de Consorcio Venequip S.A. Responde de manera profesional, estructurada y en español formal sobre maquinaria Caterpillar y plantas eléctricas.`;
+  const parts: any[] = [];
+  if (imageBase64) {
+    const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      parts.push({
+        inlineData: {
+          mimeType: match[1],
+          data: match[2],
+        },
+      });
+    }
+  }
+  const contextStr = equipmentContext ? `\n[Contexto Equipo: ${JSON.stringify(equipmentContext)}]\n` : '';
+  parts.push({ text: `${contextStr}${message}` });
+
+  return await callGeminiRestDirect(parts, systemInstruction);
+}
+

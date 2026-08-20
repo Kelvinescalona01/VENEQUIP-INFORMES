@@ -119,7 +119,19 @@ export const DEFAULT_USERS: LocalUser[] = [
     createdAt: '2026-01-01T00:00:00.000Z',
   },
   {
-    id: 10,
+    id: 2,
+    uid: 'admin_mlinares',
+    email: 'mlinares@ccvenequip.com',
+    password: 'admin',
+    name: 'M. LINARES',
+    role: 'admin',
+    status: 'active',
+    specialty: 'Administrador Principal de Operaciones y Servicios',
+    phone: '+58 414 7654321',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 3,
     uid: 'admin_escalonabyby08',
     email: 'escalonabyby08@gmail.com',
     password: 'admin',
@@ -131,39 +143,15 @@ export const DEFAULT_USERS: LocalUser[] = [
     createdAt: '2026-01-01T00:00:00.000Z',
   },
   {
-    id: 2,
-    uid: 'tech_venequip',
-    email: 'tecnico@venequip.com',
-    password: 'tecnico2026',
-    name: 'Ing. Técnico Especialista Caterpillar',
+    id: 4,
+    uid: 'test_venequip_user',
+    email: 'prueba@venequip.com',
+    password: 'venequip2026',
+    name: 'Usuario de Prueba Venequip',
     role: 'technician',
     status: 'active',
-    specialty: 'Especialista en Motores y Generación CAT',
+    specialty: 'Técnico Especialista de Pruebas Caterpillar',
     phone: '+58 412 9876543',
-    createdAt: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: 3,
-    uid: 'sup_venequip',
-    email: 'supervisor@venequip.com',
-    password: 'supervisor2026',
-    name: 'Supervisor de Taller y Campo',
-    role: 'supervisor',
-    status: 'active',
-    specialty: 'Supervisión Técnica de Motores Mayores',
-    phone: '+58 416 5554321',
-    createdAt: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: 4,
-    uid: 'ger_venequip',
-    email: 'gerencia@venequip.com',
-    password: 'gerencia2026',
-    name: 'Gerente de Sucursal y Operaciones',
-    role: 'manager',
-    status: 'active',
-    specialty: 'Gerencia de Soporte al Producto y Garantías',
-    phone: '+58 424 8887766',
     createdAt: '2026-01-01T00:00:00.000Z',
   }
 ];
@@ -395,13 +383,15 @@ export function getLocalUsers(): LocalUser[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Ensure both Kelvin Escalona admin accounts exist and are active admins
-        const admin1 = parsed.find(u => u.email?.toLowerCase() === 'kescalonaccv@gmail.com');
-        const admin2 = parsed.find(u => u.email?.toLowerCase() === 'escalonabyby08@gmail.com');
+        // Filter out any legacy sample users that were removed
+        const legacyToRemove = ['supervisor@venequip.com', 'gerencia@venequip.com', 'tecnico@venequip.com'];
+        let filtered = parsed.filter(u => !legacyToRemove.includes(u.email?.toLowerCase()));
+        let hasChanges = filtered.length !== parsed.length;
 
-        let hasChanges = false;
+        // Ensure Kelvin Escalona admin account exists
+        const admin1 = filtered.find(u => u.email?.toLowerCase() === 'kescalonaccv@gmail.com');
         if (!admin1) {
-          parsed.unshift(DEFAULT_USERS[0]);
+          filtered.unshift(DEFAULT_USERS[0]);
           hasChanges = true;
         } else {
           admin1.role = 'admin';
@@ -413,12 +403,14 @@ export function getLocalUsers(): LocalUser[] {
           }
         }
 
+        // Ensure M. Linares admin account exists
+        const admin2 = filtered.find(u => u.email?.toLowerCase() === 'mlinares@ccvenequip.com');
         if (!admin2) {
-          parsed.unshift(DEFAULT_USERS[1]);
+          filtered.splice(1, 0, DEFAULT_USERS[1]);
           hasChanges = true;
         } else {
           admin2.role = 'admin';
-          admin2.name = 'KELVIN ESCALONA';
+          admin2.name = 'M. LINARES';
           admin2.status = 'active';
           if (!admin2.password) {
             admin2.password = 'admin';
@@ -426,10 +418,32 @@ export function getLocalUsers(): LocalUser[] {
           }
         }
 
-        if (hasChanges) {
-          saveLocalUsers(parsed);
+        // Ensure Session Admin account exists
+        const admin3 = filtered.find(u => u.email?.toLowerCase() === 'escalonabyby08@gmail.com');
+        if (!admin3) {
+          filtered.splice(2, 0, DEFAULT_USERS[2]);
+          hasChanges = true;
+        } else {
+          admin3.role = 'admin';
+          admin3.name = 'KELVIN ESCALONA';
+          admin3.status = 'active';
+          if (!admin3.password) {
+            admin3.password = 'admin';
+            hasChanges = true;
+          }
         }
-        return parsed;
+
+        // Ensure Single Test User exists
+        const testUser = filtered.find(u => u.email?.toLowerCase() === 'prueba@venequip.com');
+        if (!testUser) {
+          filtered.push(DEFAULT_USERS[3]);
+          hasChanges = true;
+        }
+
+        if (hasChanges) {
+          saveLocalUsers(filtered);
+        }
+        return filtered;
       }
     }
   } catch (err) {
@@ -511,7 +525,7 @@ export async function authenticateCredentials(email: string, pass: string): Prom
 
   // Resilient Local & Cloud Verification
   const users = getLocalUsers();
-  const isMaster = cleanEmail === 'kescalonaccv@gmail.com' || cleanEmail === 'escalonabyby08@gmail.com';
+  const isMaster = cleanEmail === 'kescalonaccv@gmail.com' || cleanEmail === 'mlinares@ccvenequip.com' || cleanEmail === 'escalonabyby08@gmail.com';
   const isMasterPass = cleanPass === 'admin' || cleanPass === 'admin1234' || cleanPass === 'venequip2026';
   
   // Check direct in Cloud Firestore in real time if not in cache or if credentials need cloud verification
@@ -552,12 +566,14 @@ export async function authenticateCredentials(email: string, pass: string): Prom
   if (!found) {
     // Special master account check
     if (isMaster && isMasterPass) {
+      if (cleanEmail === 'mlinares@ccvenequip.com') return DEFAULT_USERS[1];
+      if (cleanEmail === 'escalonabyby08@gmail.com') return DEFAULT_USERS[2];
       return DEFAULT_USERS[0];
     }
-    if (cleanEmail === 'tecnico@venequip.com' && (cleanPass === 'tecnico2026' || cleanPass === '123456')) {
-      return DEFAULT_USERS[2];
+    if ((cleanEmail === 'prueba@venequip.com' || cleanEmail === 'tecnico@venequip.com') && (cleanPass === 'venequip2026' || cleanPass === 'tecnico2026' || cleanPass === '123456')) {
+      return DEFAULT_USERS[3];
     }
-    throw new Error('El correo no está registrado en el sistema. Solicite al Administrador (KELVIN ESCALONA) la creación de su cuenta.');
+    throw new Error('El correo no está registrado en el sistema. Solicite al Administrador (KELVIN ESCALONA o M. LINARES) la creación de su cuenta.');
   }
 
   if (found.status === 'inactive') {

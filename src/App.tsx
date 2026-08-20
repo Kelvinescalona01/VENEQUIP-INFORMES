@@ -15,6 +15,11 @@ import { SavedReportsModal } from './SavedReportsModal';
 import { AdminDashboardModal } from './AdminDashboardModal';
 import { ModernDashboards } from './ModernDashboards';
 import { LoginScreen } from './LoginScreen';
+import { CatDtcDecoderModal } from './CatDtcDecoderModal';
+import { CatSosFluidAnalyzerModal } from './CatSosFluidAnalyzerModal';
+import { CatGeneratorCalculatorModal } from './CatGeneratorCalculatorModal';
+import { CatVoiceDictationModal } from './CatVoiceDictationModal';
+import { CatTemplatesModal, CatReportTemplate } from './CatTemplatesModal';
 import { exportDocumentToPDF } from './pdfExporter';
 import { uploadExcelReportToDrive } from './googleWorkspace';
 import { 
@@ -102,6 +107,13 @@ export default function App() {
   const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
   const [isSavedReportsModalOpen, setIsSavedReportsModalOpen] = useState(false);
   const [isDashboardModalOpen, setIsDashboardModalOpen] = useState(false);
+
+  // Caterpillar Intelligence Tool Modals
+  const [isDtcModalOpen, setIsDtcModalOpen] = useState(false);
+  const [isSosModalOpen, setIsSosModalOpen] = useState(false);
+  const [isGenCalcModalOpen, setIsGenCalcModalOpen] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
 
   const [signatureRole, setSignatureRole] = useState<'elaborado_por' | 'revisado_por' | 'aprobado_por' | null>(null);
   const [isPolishingSection, setIsPolishingSection] = useState<string | null>(null);
@@ -345,6 +357,40 @@ export default function App() {
     showToast('Firma digitalizada guardada correctamente.');
   };
 
+  // Quick-create or update report from predictive maintenance fleet selection
+  const handleSelectEquipmentToReport = (eq: EquipmentFleetRecord) => {
+    const nextLevel = eq.nextRecommendedMaintenance.level;
+    const targetHours = eq.nextRecommendedMaintenance.targetHorometro;
+    const recommendedKits = eq.nextRecommendedMaintenance.recommendedKit;
+    const fluidSamples = eq.nextRecommendedMaintenance.fluidSamples;
+
+    const newActividad = `MANTENIMIENTO PREVENTIVO PROGRAMADO ${nextLevel} (HORÓMETRO META: ${targetHours} HORAS)`;
+    const newSol = `Se solicita a Consorcio Venequip S.A. la ejecución del servicio de mantenimiento preventivo ${nextLevel} para el equipo ${eq.modelo || 'Caterpillar'} (Serial: ${eq.serial_equipo || 'N/A'}) perteneciente al cliente ${eq.cliente || 'N/A'} con horómetro actual registrado de ${eq.lastHorometro} horas acumuladas.`;
+    const newRec = `1. Ejecutar el protocolo estándar de mantenimiento preventivo ${nextLevel} a las ${targetHours} horas.\n2. Sustituir los kits de filtros recomendados por el fabricante: ${recommendedKits?.join(', ') || 'Filtros originales Cat'}.\n3. Tomar muestras de fluidos SOS (${fluidSamples?.join(', ') || 'Aceite de motor, refrigerante'}).\n4. Próxima inspección programada a las ${targetHours + 250} horas.`;
+
+    const updated = {
+      ...report,
+      encabezado_venequip: {
+        ...report.encabezado_venequip,
+        cliente: eq.cliente || report.encabezado_venequip.cliente,
+        modelo: eq.modelo || report.encabezado_venequip.modelo,
+        serial_equipo: eq.serial_equipo || report.encabezado_venequip.serial_equipo,
+        horas_motor: `${eq.lastHorometro} Hrs`,
+        ubicacion: eq.localizacion || report.encabezado_venequip.ubicacion,
+        actividad: newActividad
+      },
+      secciones_informe: {
+        ...report.secciones_informe,
+        "1_solicitud_cliente": newSol,
+        "6_conclusiones_recomendaciones": newRec
+      }
+    };
+
+    handleReportChange(updated);
+    setActiveView('editor');
+    showToast(`Plantilla de Mantenimiento Preventivo ${nextLevel} cargada para equipo ${eq.serial_equipo || eq.modelo}`);
+  };
+
   // Show loading spinner during initial authentication check
   if (loading) {
     return (
@@ -397,6 +443,7 @@ export default function App() {
         isSaved={isSaved}
         activeView={activeView}
         setActiveView={setActiveView}
+        onlineUsers={onlineUsers}
       />
 
       {/* Offline Mode Persistent Resilience Banner */}
@@ -467,11 +514,29 @@ export default function App() {
             onOpenSignatureCanvas={(role) => setSignatureRole(role)}
             onPolishSection={handlePolishSection}
             isPolishingSection={isPolishingSection}
+            onOpenDtcModal={() => setIsDtcModalOpen(true)}
+            onOpenSosModal={() => setIsSosModalOpen(true)}
+            onOpenGenCalcModal={() => setIsGenCalcModalOpen(true)}
+            onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
+            onOpenTemplatesModal={() => setIsTemplatesModalOpen(true)}
           />
         ) : activeView === 'preview' ? (
           <ReportPreview
             report={report}
             onOpenExportModal={() => setIsExportModalOpen(true)}
+          />
+        ) : activeView === 'fleet' ? (
+          <PredictiveMaintenanceView
+            fleet={fleet}
+            onSelectEquipmentToReport={handleSelectEquipmentToReport}
+            onRefreshFleet={async () => {
+              const freshReports = await getStoredReports();
+              if (freshReports && freshReports.length > 0) {
+                const generated = buildFleetFromReports(freshReports);
+                setFleet(generated);
+                saveFleetToFirestore(generated);
+              }
+            }}
           />
         ) : (
           <ModernDashboards
@@ -526,6 +591,23 @@ export default function App() {
         onClose={() => setIsAIModalOpen(false)}
         onAnalyze={handleAnalyzeWithAI}
         isLoading={isAIAnalyzing}
+        currentReport={report}
+        onInsertTechnicalText={(sectionKey, text) => {
+          setReport(prev => {
+            const currentSectionText = (prev.secciones_informe as any)?.[sectionKey] || '';
+            const updatedSections = {
+              ...prev.secciones_informe,
+              [sectionKey]: `${currentSectionText}${text}`
+            };
+            const updated = {
+              ...prev,
+              secciones_informe: updatedSections
+            };
+            handleReportChange(updated);
+            return updated;
+          });
+          showToast('Cálculo electromecánico insertado en el informe');
+        }}
       />
 
       {/* Signature Canvas Modal */}
@@ -548,6 +630,147 @@ export default function App() {
         onClose={() => setIsExportModalOpen(false)}
         report={report}
         onShowToast={showToast}
+      />
+
+      {/* Caterpillar DTC Diagnostic Trouble Code Decoder Modal */}
+      <CatDtcDecoderModal
+        isOpen={isDtcModalOpen}
+        onClose={() => setIsDtcModalOpen(false)}
+        onInsertDtcText={(diagnosticText, suggestedTools) => {
+          setReport(prev => {
+            const currentSectionText = prev.secciones_informe["4_fallas_detectadas"] || '';
+            const updatedSection4 = currentSectionText 
+              ? `${currentSectionText}\n\n[DIAGNÓSTICO CATERPILLAR ELECTRONIC TECHNICIAN (CAT ET)]:\n${diagnosticText}`
+              : `[DIAGNÓSTICO CATERPILLAR ELECTRONIC TECHNICIAN (CAT ET)]:\n${diagnosticText}`;
+            
+            // Add suggested tools if not already present
+            const existingTools = [...prev.secciones_informe.herramientas_utilizadas];
+            suggestedTools.forEach(newT => {
+              const alreadyExists = existingTools.some(t => t.numero_parte === newT.numero_parte);
+              if (!alreadyExists) {
+                existingTools.push(newT);
+              }
+            });
+
+            const updated: InformeTecnico = {
+              ...prev,
+              secciones_informe: {
+                ...prev.secciones_informe,
+                "4_fallas_detectadas": updatedSection4,
+                herramientas_utilizadas: existingTools
+              }
+            };
+            handleReportChange(updated);
+            return updated;
+          });
+          showToast('Código de Falla CAT decodificado e insertado en Sección 4');
+        }}
+      />
+
+      {/* Caterpillar S.O.S. Fluid Analysis Modal */}
+      <CatSosFluidAnalyzerModal
+        isOpen={isSosModalOpen}
+        onClose={() => setIsSosModalOpen(false)}
+        onInsertReport={(sosText) => {
+          setReport(prev => {
+            const currentSec6 = prev.secciones_informe["6_conclusiones_recomendaciones"] || '';
+            const updatedSec6 = currentSec6
+              ? `${currentSec6}\n\n[RESULTADOS DE LABORATORIO S.O.S. CATERPILLAR]:\n${sosText}`
+              : `[RESULTADOS DE LABORATORIO S.O.S. CATERPILLAR]:\n${sosText}`;
+
+            const updated: InformeTecnico = {
+              ...prev,
+              secciones_informe: {
+                ...prev.secciones_informe,
+                "6_conclusiones_recomendaciones": updatedSec6
+              }
+            };
+            handleReportChange(updated);
+            return updated;
+          });
+          showToast('Evaluación S.O.S. de fluidos insertada en Conclusiones y Recomendaciones');
+        }}
+      />
+
+      {/* Caterpillar Generator Electrical & Load Bank Calculator Modal */}
+      <CatGeneratorCalculatorModal
+        isOpen={isGenCalcModalOpen}
+        onClose={() => setIsGenCalcModalOpen(false)}
+        onInsertCalculations={(calcText) => {
+          setReport(prev => {
+            const currentSec3 = prev.secciones_informe["3_actividades_efectuadas"] || '';
+            const updatedSec3 = currentSec3
+              ? `${currentSec3}\n\n[REGISTRO DE MEDICIONES ELÉCTRICAS Y CARGA CAT]:\n${calcText}`
+              : `[REGISTRO DE MEDICIONES ELÉCTRICAS Y CARGA CAT]:\n${calcText}`;
+
+            const updated: InformeTecnico = {
+              ...prev,
+              secciones_informe: {
+                ...prev.secciones_informe,
+                "3_actividades_efectuadas": updatedSec3
+              }
+            };
+            handleReportChange(updated);
+            return updated;
+          });
+          showToast('Mediciones y cálculos del generador insertados en Sección 3');
+        }}
+      />
+
+      {/* Caterpillar Technical Hands-Free Voice Dictation Modal */}
+      <CatVoiceDictationModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        onInsertText={(targetSection, textToInsert) => {
+          setReport(prev => {
+            const currentSecText = (prev.secciones_informe as any)[targetSection] || '';
+            const updatedSecText = currentSecText
+              ? `${currentSecText}\n${textToInsert}`
+              : textToInsert;
+
+            const updated: InformeTecnico = {
+              ...prev,
+              secciones_informe: {
+                ...prev.secciones_informe,
+                [targetSection]: updatedSecText
+              }
+            };
+            handleReportChange(updated);
+            return updated;
+          });
+          showToast('Dictado por voz incorporado con normalización técnica Caterpillar');
+        }}
+      />
+
+      {/* Caterpillar Standard Report Templates Modal */}
+      <CatTemplatesModal
+        isOpen={isTemplatesModalOpen}
+        onClose={() => setIsTemplatesModalOpen(false)}
+        onApplyTemplate={(template) => {
+          setReport(prev => {
+            const merged: InformeTecnico = {
+              ...prev,
+              encabezado_venequip: {
+                ...prev.encabezado_venequip,
+                ...(template.data.encabezado_venequip || {}),
+                // Preserve current user details or location if already filled
+                cliente: prev.encabezado_venequip.cliente || template.data.encabezado_venequip?.cliente || '',
+                localizacion: prev.encabezado_venequip.localizacion || template.data.encabezado_venequip?.localizacion || '',
+                serial_equipo: prev.encabezado_venequip.serial_equipo || template.data.encabezado_venequip?.serial_equipo || '',
+                serial_motor: prev.encabezado_venequip.serial_motor || template.data.encabezado_venequip?.serial_motor || '',
+                horas_motor: prev.encabezado_venequip.horas_motor || template.data.encabezado_venequip?.horas_motor || '250',
+                fecha: new Date().toISOString().split('T')[0]
+              },
+              secciones_informe: {
+                ...prev.secciones_informe,
+                ...(template.data.secciones_informe || {})
+              }
+            };
+            handleReportChange(merged);
+            return merged;
+          });
+          showToast(`Plantilla oficial "${template.title}" aplicada con éxito`);
+        }}
       />
 
       {/* Footer */}

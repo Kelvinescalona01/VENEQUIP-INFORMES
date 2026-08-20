@@ -185,6 +185,58 @@ export const LoginScreen: React.FC = () => {
               <span>Ingresar con Google Workspace</span>
             </button>
 
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">
+                Acceso Rápido Autorizado
+              </div>
+              <div className="grid grid-cols-1 gap-1.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('kescalonaccv@gmail.com');
+                    setPassword('admin');
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 transition flex items-center justify-between text-[11px] cursor-pointer"
+                >
+                  <div>
+                    <span className="font-bold text-slate-900">👑 K. Escalona (Admin Principal)</span>
+                    <span className="block text-[10px] text-slate-500 font-mono">kescalonaccv@gmail.com</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Auto-Llenar</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('mlinares@ccvenequip.com');
+                    setPassword('admin');
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 transition flex items-center justify-between text-[11px] cursor-pointer"
+                >
+                  <div>
+                    <span className="font-bold text-slate-900">👑 M. Linares (Admin Principal)</span>
+                    <span className="block text-[10px] text-slate-500 font-mono">mlinares@ccvenequip.com</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Auto-Llenar</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('prueba@venequip.com');
+                    setPassword('venequip2026');
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 transition flex items-center justify-between text-[11px] cursor-pointer"
+                >
+                  <div>
+                    <span className="font-bold text-slate-900">🔧 Venequip (Usuario de Prueba)</span>
+                    <span className="block text-[10px] text-slate-500 font-mono">prueba@venequip.com</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">Auto-Llenar</span>
+                </button>
+              </div>
+            </div>
+
           </div>
 
           {/* Card Footer */}

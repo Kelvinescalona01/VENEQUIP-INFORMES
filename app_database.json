@@ -1,0 +1,63 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "uid": "admin_kescalonaccv",
+      "email": "kescalonaccv@gmail.com",
+      "password": "admin",
+      "name": "KELVIN ESCALONA",
+      "role": "admin",
+      "status": "active",
+      "specialty": "Administrador General del Sistema",
+      "phone": "+58 414 1234567",
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "uid": "admin_mlinares",
+      "email": "mlinares@ccvenequip.com",
+      "password": "admin",
+      "name": "M. LINARES",
+      "role": "admin",
+      "status": "active",
+      "specialty": "Administrador Principal de Operaciones y Servicios",
+      "phone": "+58 414 7654321",
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "uid": "admin_escalonabyby08",
+      "email": "escalonabyby08@gmail.com",
+      "password": "admin",
+      "name": "KELVIN ESCALONA",
+      "role": "admin",
+      "status": "active",
+      "specialty": "Administrador General del Sistema",
+      "phone": "+58 414 1234567",
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "uid": "test_venequip_user",
+      "email": "prueba@venequip.com",
+      "password": "venequip2026",
+      "name": "Usuario de Prueba Venequip",
+      "role": "technician",
+      "status": "active",
+      "specialty": "Técnico Especialista de Pruebas Caterpillar",
+      "phone": "+58 412 9876543",
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "reports": [],
+  "syncLogs": [
+    {
+      "id": 1,
+      "eventType": "SYSTEM_INIT",
+      "description": "Sistema inicializado con almacenamiento persistente centralizado Venequip.",
+      "userEmail": "kescalonaccv@gmail.com",
+      "fileUrl": null,
+      "createdAt": "2026-08-20T14:10:11.199Z"
+    }
+  ]
+}
