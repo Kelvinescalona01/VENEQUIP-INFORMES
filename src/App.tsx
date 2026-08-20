@@ -137,7 +137,6 @@ export default function App() {
         if (initialReports && initialReports.length > 0) {
           const generatedFleet = buildFleetFromReports(initialReports);
           setFleet(generatedFleet);
-          saveFleetToFirestore(generatedFleet);
         }
       } catch (err) {
         console.log('Initial sync notice:', err);
@@ -147,16 +146,14 @@ export default function App() {
 
     // Listen to real-time updates for reports and users from Cloud Firestore
     const unsubReports = subscribeToReports((updatedReports) => {
-      console.log('Real-time reports updated from Firebase:', updatedReports.length);
       if (updatedReports && updatedReports.length > 0) {
         const updatedFleet = buildFleetFromReports(updatedReports);
         setFleet(updatedFleet);
-        saveFleetToFirestore(updatedFleet);
       }
     });
 
     const unsubUsers = subscribeToUsers((updatedUsers) => {
-      console.log('Real-time users updated from Firebase:', updatedUsers.length);
+      console.log('Real-time users updated:', updatedUsers.length);
     });
 
     // Real-time Online Users Presence Listener
@@ -193,13 +190,6 @@ export default function App() {
       () => activeView,
       () => report.encabezado_venequip?.numero_servicio || ''
     );
-
-    // Save active user view state to Firestore automatically
-    saveAppStateToFirestore('active_session_view', {
-      userEmail: user.email,
-      activeView,
-      lastActive: new Date().toISOString()
-    });
 
     return () => {
       cleanupHeartbeat();

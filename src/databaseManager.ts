@@ -175,6 +175,9 @@ const STORAGE_KEY_CLIENTES = 'venequip_db_clientes_v2';
 const STORAGE_KEY_MODELOS = 'venequip_db_modelos_v2';
 const STORAGE_KEY_SUCURSALES = 'venequip_db_sucursales_v2';
 const STORAGE_KEY_HERRAMIENTAS = 'venequip_db_herramientas_v2';
+const STORAGE_KEY_SEEDED = 'venequip_firebase_seeded_v2';
+
+let isFirestoreQuotaExhausted = false;
 
 /**
  * Returns the number of reports waiting in the offline queue to be synchronized
@@ -194,6 +197,7 @@ export function getPendingReportsCount(): number {
  * Flushes the pending sync queue to Cloud Firestore
  */
 export async function flushPendingReportsQueue(): Promise<number> {
+  if (isFirestoreQuotaExhausted) return 0;
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PENDING_QUEUE);
     if (!raw) return 0;
@@ -220,7 +224,12 @@ export async function flushPendingReportsQueue(): Promise<number> {
           updatedAt: new Date().toISOString()
         }, { merge: true });
         syncedCount++;
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+          isFirestoreQuotaExhausted = true;
+          remainingQueue.push(report);
+          break;
+        }
         remainingQueue.push(report);
       }
     }
@@ -261,9 +270,14 @@ export function initializeLocalDatabase(): void {
 }
 
 /**
- * Pushes all initial users and default catalogues to Cloud Firestore so the remote database is fully populated
+ * Pushes initial users and default catalogues to Cloud Firestore once, avoiding quota exhaustion
  */
-export async function seedAllDataToFirebase(): Promise<void> {
+export async function seedAllDataToFirebase(force: boolean = false): Promise<void> {
+  if (isFirestoreQuotaExhausted) return;
+  if (!force && localStorage.getItem(STORAGE_KEY_SEEDED)) {
+    return;
+  }
+
   try {
     // 1. Seed users
     const users = getLocalUsers();
@@ -281,41 +295,30 @@ export async function seedAllDataToFirebase(): Promise<void> {
         specialty: u.specialty || '',
         phone: u.phone || '',
         updatedAt: new Date().toISOString()
-      }, { merge: true }).catch(() => {});
+      }, { merge: true }).catch((err) => {
+        if (err?.code === 'resource-exhausted') isFirestoreQuotaExhausted = true;
+      });
     }
 
-    // 2. Seed reports
-    const reports = await getStoredReports();
-    for (const report of reports) {
-      const reportNumber = report.encabezado_venequip?.numero_servicio || `REP-${Date.now()}`;
-      const safeDocId = reportNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const reportDocRef = doc(db, 'reports', safeDocId);
-      await setDoc(reportDocRef, {
-        reportId: safeDocId,
-        numeroServicio: report.encabezado_venequip?.numero_servicio || '',
-        cliente: report.encabezado_venequip?.cliente || '',
-        modelo: report.encabezado_venequip?.modelo || '',
-        serialEquipo: report.encabezado_venequip?.serial_equipo || '',
-        sucursal: report.encabezado_venequip?.sucursal || '',
-        fecha: report.encabezado_venequip?.fecha || new Date().toISOString(),
-        reportData: JSON.stringify(report),
+    // 2. Seed catalogs
+    if (!isFirestoreQuotaExhausted) {
+      const catalogsDocRef = doc(db, 'catalogs', 'master_catalogs');
+      await setDoc(catalogsDocRef, {
+        clientes: DEFAULT_CLIENTES,
+        modelos: DEFAULT_MODELOS_CAT,
+        sucursales: DEFAULT_SUCURSALES,
+        herramientas: DEFAULT_HERRAMIENTAS,
+        actividades: DEFAULT_ACTIVIDADES,
+        repuestos: DEFAULT_REPUESTOS_CAT,
         updatedAt: new Date().toISOString()
-      }, { merge: true }).catch(() => {});
+      }, { merge: true }).catch((err) => {
+        if (err?.code === 'resource-exhausted') isFirestoreQuotaExhausted = true;
+      });
     }
 
-    // 3. Seed catalogs
-    const catalogsDocRef = doc(db, 'catalogs', 'master_catalogs');
-    await setDoc(catalogsDocRef, {
-      clientes: DEFAULT_CLIENTES,
-      modelos: DEFAULT_MODELOS_CAT,
-      sucursales: DEFAULT_SUCURSALES,
-      herramientas: DEFAULT_HERRAMIENTAS,
-      actividades: DEFAULT_ACTIVIDADES,
-      repuestos: DEFAULT_REPUESTOS_CAT,
-      updatedAt: new Date().toISOString()
-    }, { merge: true }).catch(() => {});
-  } catch (e) {
-    console.warn('Seeding to Firebase notice:', e);
+    localStorage.setItem(STORAGE_KEY_SEEDED, 'true');
+  } catch (e: any) {
+    if (e?.code === 'resource-exhausted') isFirestoreQuotaExhausted = true;
   }
 }
 
@@ -473,9 +476,12 @@ export function saveLocalUsers(users: LocalUser[]): void {
     console.error('Error saving local users:', err);
   }
 
+  if (isFirestoreQuotaExhausted) return;
+
   // Asynchronously synchronize users with Firestore
   try {
     users.forEach(async (u) => {
+      if (isFirestoreQuotaExhausted) return;
       const safeId = (u.email || u.uid || `user_${u.id}`).replace(/[^a-zA-Z0-9_-]/g, '_');
       const userRef = doc(db, 'users', safeId);
       await setDoc(userRef, {
@@ -488,7 +494,9 @@ export function saveLocalUsers(users: LocalUser[]): void {
         specialty: u.specialty || '',
         phone: u.phone || '',
         updatedAt: new Date().toISOString()
-      }, { merge: true }).catch(() => {});
+      }, { merge: true }).catch((err) => {
+        if (err?.code === 'resource-exhausted') isFirestoreQuotaExhausted = true;
+      });
     });
   } catch (e) {
     // Graceful offline fallback
@@ -686,23 +694,40 @@ export async function saveStoredReport(report: InformeTecnico): Promise<void> {
     console.error('Error saving local report:', e);
   }
 
-  // 1. Sync to Cloud Firestore online database in real-time
-  try {
-    const safeDocId = reportNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const reportDocRef = doc(db, 'reports', safeDocId);
-    await setDoc(reportDocRef, {
-      reportId: safeDocId,
-      numeroServicio: report.encabezado_venequip?.numero_servicio || '',
-      cliente: report.encabezado_venequip?.cliente || '',
-      modelo: report.encabezado_venequip?.modelo || '',
-      serialEquipo: report.encabezado_venequip?.serial_equipo || '',
-      sucursal: report.encabezado_venequip?.sucursal || '',
-      fecha: report.encabezado_venequip?.fecha || new Date().toISOString(),
-      reportData: JSON.stringify(report),
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-  } catch (firestoreErr) {
-    console.warn('Direct Firestore sync failed, queueing for background reconnection:', firestoreErr);
+  // 1. Sync to Cloud Firestore online database in real-time (with quota protection)
+  if (!isFirestoreQuotaExhausted) {
+    try {
+      const safeDocId = reportNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const reportDocRef = doc(db, 'reports', safeDocId);
+      await setDoc(reportDocRef, {
+        reportId: safeDocId,
+        numeroServicio: report.encabezado_venequip?.numero_servicio || '',
+        cliente: report.encabezado_venequip?.cliente || '',
+        modelo: report.encabezado_venequip?.modelo || '',
+        serialEquipo: report.encabezado_venequip?.serial_equipo || '',
+        sucursal: report.encabezado_venequip?.sucursal || '',
+        fecha: report.encabezado_venequip?.fecha || new Date().toISOString(),
+        reportData: JSON.stringify(report),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (firestoreErr: any) {
+      if (firestoreErr?.code === 'resource-exhausted' || firestoreErr?.message?.includes('Quota')) {
+        isFirestoreQuotaExhausted = true;
+      }
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_PENDING_QUEUE);
+        const queue: InformeTecnico[] = raw ? JSON.parse(raw) : [];
+        const qIdx = queue.findIndex(q => q.encabezado_venequip?.numero_servicio === reportNumber);
+        if (qIdx >= 0) {
+          queue[qIdx] = report;
+        } else {
+          queue.push(report);
+        }
+        localStorage.setItem(STORAGE_KEY_PENDING_QUEUE, JSON.stringify(queue));
+      } catch (qErr) {}
+    }
+  } else {
+    // Save to pending queue when quota is currently paused
     try {
       const raw = localStorage.getItem(STORAGE_KEY_PENDING_QUEUE);
       const queue: InformeTecnico[] = raw ? JSON.parse(raw) : [];
@@ -1042,11 +1067,15 @@ export function recordSessionAuditLog(entry: { email: string; role?: string; eve
     localStorage.setItem(STORAGE_KEY_SESSION_LOGS, JSON.stringify(logs.slice(0, 100)));
   } catch (e) {}
 
-  // Asynchronously record log in Firestore online
-  try {
-    const logDocRef = doc(db, 'audit_logs', newLog.id);
-    setDoc(logDocRef, newLog).catch(() => {});
-  } catch (e) {}
+  // Asynchronously record log in Firestore online (if quota allows)
+  if (!isFirestoreQuotaExhausted) {
+    try {
+      const logDocRef = doc(db, 'audit_logs', newLog.id);
+      setDoc(logDocRef, newLog).catch((err) => {
+        if (err?.code === 'resource-exhausted') isFirestoreQuotaExhausted = true;
+      });
+    } catch (e) {}
+  }
 }
 
 /**

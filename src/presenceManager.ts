@@ -47,6 +47,8 @@ export function getAvatarColor(nameOrEmail: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
+let isQuotaExhausted = false;
+
 /**
  * Registers or updates the active user presence in Cloud Firestore
  */
@@ -59,7 +61,6 @@ export async function registerUserPresence(
 
   const sessionId = getOrCreateSessionId();
   const safeSessionDocId = `${user.email.replace(/[^a-zA-Z0-9_-]/g, '_')}_${sessionId}`;
-  const presenceDocRef = doc(db, 'presence', safeSessionDocId);
 
   const presenceData: OnlineUserPresence = {
     sessionId,
@@ -75,23 +76,28 @@ export async function registerUserPresence(
     avatarColor: getAvatarColor(user.name || user.email)
   };
 
+  // Always update local cache for instant UI response
+  const currentList = getCachedOnlineUsers();
+  const idx = currentList.findIndex(u => u.sessionId === sessionId || u.email === user.email);
+  if (idx >= 0) {
+    currentList[idx] = presenceData;
+  } else {
+    currentList.push(presenceData);
+  }
+  localStorage.setItem(STORAGE_KEY_PRESENCE, JSON.stringify(currentList));
+
+  if (isQuotaExhausted) return;
+
   try {
+    const presenceDocRef = doc(db, 'presence', safeSessionDocId);
     await setDoc(presenceDocRef, {
       ...presenceData,
       firestoreTimestamp: serverTimestamp()
     }, { merge: true });
-
-    // Update local cache
-    const currentList = getCachedOnlineUsers();
-    const idx = currentList.findIndex(u => u.sessionId === sessionId || u.email === user.email);
-    if (idx >= 0) {
-      currentList[idx] = presenceData;
-    } else {
-      currentList.push(presenceData);
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+      isQuotaExhausted = true;
     }
-    localStorage.setItem(STORAGE_KEY_PRESENCE, JSON.stringify(currentList));
-  } catch (err) {
-    console.warn('Presence registration notice (using local presence):', err);
   }
 }
 
@@ -130,10 +136,10 @@ export function startPresenceHeartbeat(
   // Register immediately
   registerUserPresence(user, getView(), getReportId());
 
-  // Heartbeat every 25 seconds
+  // Heartbeat every 2 minutes (prevents quota exhaustion)
   const intervalId = setInterval(() => {
     registerUserPresence(user, getView(), getReportId());
-  }, 25000);
+  }, 120000);
 
   // Unload handler
   const handleUnload = () => {
@@ -223,8 +229,15 @@ export async function saveAppStateToFirestore(
   userEmail?: string
 ): Promise<void> {
   if (!key) return;
+  const safeKey = key.replace(/[^a-zA-Z0-9_-]/g, '_');
+  // Always persist locally first
   try {
-    const safeKey = key.replace(/[^a-zA-Z0-9_-]/g, '_');
+    localStorage.setItem(`venequip_state_${safeKey}`, JSON.stringify(value));
+  } catch (e) {}
+
+  if (isQuotaExhausted) return;
+
+  try {
     const docRef = doc(db, 'app_state', safeKey);
     const payload: AppDynamicState = {
       key: safeKey,
@@ -233,12 +246,10 @@ export async function saveAppStateToFirestore(
       updatedBy: userEmail || 'system'
     };
     await setDoc(docRef, payload, { merge: true });
-    
-    // Also save in localStorage
-    localStorage.setItem(`venequip_state_${safeKey}`, JSON.stringify(value));
-  } catch (err) {
-    console.warn(`Error persisting app_state key ${key} to Firestore:`, err);
-    localStorage.setItem(`venequip_state_${key}`, JSON.stringify(value));
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+      isQuotaExhausted = true;
+    }
   }
 }
 
@@ -303,16 +314,22 @@ export const subscribeToOnlinePresence = subscribeToOnlineUsers;
 export async function saveFleetToFirestore(fleet: any[]): Promise<void> {
   if (!fleet) return;
   try {
+    localStorage.setItem('venequip_equipment_fleet_cache', JSON.stringify(fleet));
+  } catch (e) {}
+
+  if (isQuotaExhausted) return;
+
+  try {
     const fleetDocRef = doc(db, 'app_state', 'caterpillar_fleet_registry');
     await setDoc(fleetDocRef, {
       key: 'caterpillar_fleet_registry',
       value: fleet,
       updatedAt: new Date().toISOString()
     }, { merge: true });
-    localStorage.setItem('venequip_equipment_fleet_cache', JSON.stringify(fleet));
-  } catch (err) {
-    console.warn('Error saving fleet to Firestore:', err);
-    localStorage.setItem('venequip_equipment_fleet_cache', JSON.stringify(fleet));
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+      isQuotaExhausted = true;
+    }
   }
 }
 

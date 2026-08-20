@@ -21,7 +21,7 @@ const FirebaseConnectionContext = createContext<FirebaseConnectionContextType>({
 });
 
 export const FirebaseConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [status, setStatus] = useState<FirebaseConnectionStatus>(navigator.onLine ? 'connecting' : 'disconnected');
+  const [status, setStatus] = useState<FirebaseConnectionStatus>(navigator.onLine ? 'connected' : 'disconnected');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [pendingSyncCount, setPendingSyncCount] = useState<number>(getPendingReportsCount());
   const [lastConnectedTime, setLastConnectedTime] = useState<Date | null>(new Date());
@@ -46,14 +46,11 @@ export const FirebaseConnectionProvider: React.FC<{ children: React.ReactNode }>
     }
 
     try {
-      // Lightweight probe or check
-      setStatus((prev) => (prev === 'disconnected' ? 'reconnecting' : prev));
-      // Trigger flush
-      await checkPendingQueue();
       setStatus('connected');
       setIsOnline(true);
       setLastConnectedTime(new Date());
       failureCountRef.current = 0;
+      await checkPendingQueue();
     } catch (err) {
       failureCountRef.current += 1;
       if (failureCountRef.current > 2) {
@@ -66,10 +63,9 @@ export const FirebaseConnectionProvider: React.FC<{ children: React.ReactNode }>
     // 1. Browser online/offline events
     const handleOnline = async () => {
       setIsOnline(true);
-      setStatus('reconnecting');
-      await checkPendingQueue();
       setStatus('connected');
       setLastConnectedTime(new Date());
+      await checkPendingQueue();
     };
 
     const handleOffline = () => {
@@ -80,52 +76,19 @@ export const FirebaseConnectionProvider: React.FC<{ children: React.ReactNode }>
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // 2. Real-time Firestore probe listener
-    let unsubscribeProbe: (() => void) | null = null;
-    try {
-      // Listen to reports metadata / doc
-      const probeDocRef = doc(db, 'catalogs', 'connection_probe');
-      unsubscribeProbe = onSnapshot(
-        probeDocRef,
-        { includeMetadataChanges: true },
-        (snapshot) => {
-          const fromCache = snapshot.metadata.fromCache;
-          if (fromCache && !navigator.onLine) {
-            setStatus('disconnected');
-          } else {
-            setStatus('connected');
-            setIsOnline(true);
-            setLastConnectedTime(new Date());
-            checkPendingQueue();
-          }
-        },
-        (error) => {
-          console.warn('Firestore probe connectivity notification:', error.message);
-          if (!navigator.onLine || error.code === 'unavailable') {
-            setStatus('disconnected');
-          }
-        }
-      );
-    } catch (e) {
-      console.warn('Probe initialization error:', e);
-    }
-
-    // 3. Periodic health heartbeat every 15 seconds
+    // 2. Periodic sync check every 60 seconds (prevents quota overload)
     const interval = setInterval(() => {
-      pingConnection();
-      setPendingSyncCount(getPendingReportsCount());
-    }, 15000);
-
-    // Initial check
-    pingConnection();
+      if (navigator.onLine) {
+        setPendingSyncCount(getPendingReportsCount());
+      }
+    }, 60000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
-      if (unsubscribeProbe) unsubscribeProbe();
     };
-  }, [checkPendingQueue, pingConnection]);
+  }, [checkPendingQueue]);
 
   const reconnectNow = async () => {
     setStatus('reconnecting');
