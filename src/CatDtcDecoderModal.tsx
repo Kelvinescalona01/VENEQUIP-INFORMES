@@ -32,11 +32,57 @@ export interface CatDtcRecord {
 
 export const CAT_DTC_DATABASE: CatDtcRecord[] = [
   {
+    mid: 'CUMMINS INSITE',
+    cid: 'FC 143 / SPN 100',
+    fmi: 'FMI 01',
+    fmiDesc: 'Alerta de Presión de Aceite Baja del Motor - Nivel de Advertencia / Protección',
+    componentName: 'Sensor de Presión de Aceite de Motor (Cummins QSK / QSL / QSX)',
+    system: 'Lubricación',
+    applicableEngines: ['Cummins QSK60', 'Cummins QSK23', 'Cummins QSK19', 'Cummins QSL9', 'Cummins QSX15'],
+    symptom: 'Alarma de baja presión en PowerCommand / Panel DeepSea y reducción automática de carga.',
+    rootCauses: [
+      'Nivel bajo de aceite en cárter o viscosidad incorrecta (SAE 15W-40 Valvoline Premium Blue).',
+      'Filtro de lubricante saturado (LF9009 / LF14000NN).',
+      'Válvula de derivación del enfriador de aceite trabada.',
+      'Bomba de aceite de lubricación desgastada.'
+    ],
+    diagnosticSteps: [
+      '1. Medir presión de aceite real con manómetro mecánico en el puerto del bloque.',
+      '2. Conectar Cummins INSITE vía Inline 7 y monitorear canal de presión analógica.',
+      '3. Reemplazar filtros de aceite y cortar el elemento para inspección de partículas.',
+      '4. Comprobar mangueras de lubricación de turbocargadores.'
+    ],
+    recommendedAction: 'Efectuar cambio de lubricante y filtros. Comprobar calibración del sensor de presión en INSITE.'
+  },
+  {
+    mid: 'PERKINS / FG WILSON',
+    cid: 'SPN 110',
+    fmi: 'FMI 00',
+    fmiDesc: 'Sobretemperatura de Refrigerante de Motor - Nivel Crítico',
+    componentName: 'Sensor de Temperatura de Enfriamiento (Perkins 4000 / 2800 / 1100)',
+    system: 'Refrigeración',
+    applicableEngines: ['Perkins 4016', 'Perkins 4012', 'Perkins 2806', 'Perkins 1106', 'FG Wilson'],
+    symptom: 'Temperatura de agua superior a 98°C. Apagado automático por alta temperatura.',
+    rootCauses: [
+      'Nivel deficiente de refrigerante en tanque de expansión.',
+      'Incrustaciones o suciedad en núcleo del radiador.',
+      'Termostato bloqueado en posición cerrada.',
+      'Bomba de agua de circulación con impulsor flojo.'
+    ],
+    diagnosticSteps: [
+      '1. Inspeccionar nivel de refrigerante con motor frío.',
+      '2. Medir salto térmico entre entrada y salida del radiador con cámara termográfica.',
+      '3. Verificar apertura de termostatos.',
+      '4. Comprobar tensión de correas de ventilador.'
+    ],
+    recommendedAction: 'Limpieza química de radiador, purga del circuito y reemplazo de termostatos.'
+  },
+  {
     mid: 'MID 036',
     cid: 'CID 0100',
     fmi: 'FMI 01',
     fmiDesc: 'FMI 01: Datos válidos pero por debajo del rango normal (Más severo - Nivel Crítico)',
-    componentName: 'Sensor de Presión de Aceite de Motor',
+    componentName: 'Sensor de Presión de Aceite de Motor (Caterpillar)',
     system: 'Lubricación',
     applicableEngines: ['C9', 'C13', 'C15', 'C18', 'C27', 'C32', '3512', '3516'],
     symptom: 'Lámpara de advertencia de presión de aceite encendida, reducción de potencia automática (Derate) o apagado de emergencia (Shutdown).',
@@ -318,14 +364,14 @@ export const CatDtcDecoderModal: React.FC<CatDtcDecoderModalProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-lg font-black text-white tracking-wide">
-                  Decodificador de Códigos de Falla Caterpillar (MID / CID / FMI)
+                  Decodificador de Códigos de Falla y Diagnóstico Multimarca
                 </h2>
                 <span className="bg-amber-400/20 text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-400/30">
-                  CAT ET 2026.1
+                  CAT / CUMMINS / PERKINS / J1939
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Base de conocimiento técnico oficial para motores C7-C32, Serie 3500 y controladores EMCP
+                Base de conocimiento técnico oficial para motores y generadores Caterpillar, Cummins, Perkins y Detroit
               </p>
             </div>
           </div>

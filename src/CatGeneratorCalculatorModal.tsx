@@ -181,7 +181,7 @@ export const CatGeneratorCalculatorModal: React.FC<CatGeneratorCalculatorModalPr
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-lg font-black text-white tracking-wide">
-                  Calculadora Eléctrica y Banco de Carga de Generadores CAT
+                  Calculadora Eléctrica y Banco de Carga de Generadores Multimarca
                 </h2>
                 <span className="bg-amber-400/20 text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-400/30">
                   ISO 8528 / NEMA MG-1

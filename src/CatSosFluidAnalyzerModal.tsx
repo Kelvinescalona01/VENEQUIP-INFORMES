@@ -221,7 +221,7 @@ export const CatSosFluidAnalyzerModal: React.FC<CatSosFluidAnalyzerModalProps> =
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-lg font-black text-white tracking-wide">
-                  Laboratorio y Matriz de Análisis S.O.S. Caterpillar
+                  Laboratorio y Matriz de Análisis de Fluidos S.O.S. Multimarca
                 </h2>
                 <span className="bg-emerald-400/20 text-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-400/30">
                   Norma ASTM / CAT SOS

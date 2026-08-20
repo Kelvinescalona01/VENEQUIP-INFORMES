@@ -84,15 +84,15 @@ export async function authenticateUserWithPassword(email: string, password: stri
       id: cleanEmail === 'mlinares@ccvenequip.com' ? 2 : 1,
       uid: `admin_${cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`,
       email: cleanEmail,
-      name: cleanEmail === 'mlinares@ccvenequip.com' ? 'M. LINARES' : 'KELVIN ESCALONA',
+      name: cleanEmail === 'mlinares@ccvenequip.com' ? 'MAURICIO LINARES' : 'KELVIN ESCALONA',
       role: 'admin',
       status: 'active',
-      specialty: 'Administrador General del Sistema',
+      specialty: cleanEmail === 'mlinares@ccvenequip.com' ? 'Director General y Propietario - Venequip S.A.' : 'Administrador General del Sistema',
       phone: '+58 414 1234567',
     };
   }
 
-  throw new Error('El correo ingresado no está registrado en el sistema. Solicite al Administrador (KELVIN ESCALONA o M. LINARES) la creación de su cuenta.');
+  throw new Error('El correo ingresado no está registrado en el sistema. Solicite al Administrador (MAURICIO LINARES o KELVIN ESCALONA) la creación de su cuenta.');
 }
 
 /**
@@ -137,7 +137,7 @@ export async function ensureDefaultUsers(): Promise<void> {
     }
   }
 
-  // 2. Master Admin 2 (M. Linares)
+  // 2. Master Admin 2 (Mauricio Linares)
   const admin2Email = 'mlinares@ccvenequip.com';
   const admin2Idx = store.users.findIndex(u => u.email.toLowerCase() === admin2Email);
   if (admin2Idx === -1) {
@@ -146,17 +146,18 @@ export async function ensureDefaultUsers(): Promise<void> {
       uid: 'admin_mlinares',
       email: admin2Email,
       password: 'admin',
-      name: 'M. LINARES',
+      name: 'MAURICIO LINARES',
       role: 'admin',
       status: 'active',
-      specialty: 'Administrador Principal de Operaciones y Servicios',
+      specialty: 'Director General y Propietario - Venequip S.A.',
       phone: '+58 414 7654321',
       createdAt: '2026-01-01T00:00:00.000Z',
     });
     updated = true;
   } else {
     store.users[admin2Idx].role = 'admin';
-    store.users[admin2Idx].name = 'M. LINARES';
+    store.users[admin2Idx].name = 'MAURICIO LINARES';
+    store.users[admin2Idx].specialty = 'Director General y Propietario - Venequip S.A.';
     store.users[admin2Idx].status = 'active';
     if (!store.users[admin2Idx].password) {
       store.users[admin2Idx].password = 'admin';

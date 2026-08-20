@@ -28,7 +28,7 @@ interface CatVoiceDictationModalProps {
   };
 }
 
-// Specialized Caterpillar Technical Vocabulary Normalizer
+// Specialized Multi-brand Technical Vocabulary Normalizer
 const CAT_VOCABULARY_MAP: Record<string, string> = {
   'orometro': 'horómetro',
   'horometro': 'horómetro',
@@ -42,9 +42,13 @@ const CAT_VOCABULARY_MAP: Record<string, string> = {
   'fmi': 'FMI',
   'mid': 'MID',
   'cat et': 'Caterpillar Electronic Technician (CAT ET)',
+  'insite': 'Cummins INSITE',
+  'deepsea': 'DeepSea DSE',
+  'fleetguard': 'Fleetguard',
   'sis': 'CAT SIS 2.0',
-  'elc': 'refrigerante CAT ELC',
-  'deo': 'aceite CAT DEO 15W-40',
+  'elc': 'refrigerante ELC',
+  'deo': 'aceite DEO 15W-40',
+  'valvoline': 'Valvoline Premium Blue',
   'sos': 'análisis de fluidos S.O.S.',
   'megometro': 'megóhmetro',
   'megado': 'prueba de aislamiento con megóhmetro',
@@ -185,14 +189,14 @@ export const CatVoiceDictationModal: React.FC<CatVoiceDictationModalProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-lg font-black text-white tracking-wide">
-                  Dictado por Voz Técnico Caterpillar
+                  Dictado por Voz Técnico Multimarca
                 </h2>
                 <span className="bg-amber-400/20 text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-400/30">
                   Manos Libres
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Reconocimiento de voz adaptado con auto-corrección de terminología técnica CAT
+                Reconocimiento de voz adaptado con auto-corrección de terminología técnica multimarca
               </p>
             </div>
           </div>

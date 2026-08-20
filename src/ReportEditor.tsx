@@ -371,7 +371,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
   return (
     <div id="report-editor-container" className="space-y-6">
       
-      {/* CATERPILLAR INTELLIGENCE & PRODUCTIVITY TOOLBAR */}
+      {/* VENEQUIP MULTI-BRAND INTELLIGENCE & PRODUCTIVITY TOOLBAR */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-md flex flex-wrap items-center justify-between gap-3 text-white">
         <div className="flex items-center space-x-2.5">
           <div className="p-2 bg-amber-500 rounded-xl text-slate-950 shadow-sm font-black">
@@ -380,14 +380,14 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <span className="text-xs font-black text-white uppercase tracking-wider">
-                Suite de Ingeniería Caterpillar
+                Suite de Ingeniería Técnica Multimarca
               </span>
               <span className="bg-amber-500/20 text-amber-300 text-[10px] font-black px-2 py-0.2 rounded-full border border-amber-500/30">
-                Turbo 2026
+                Venequip 2026
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Herramientas de diagnóstico asistido, laboratorio de fluidos, cálculo eléctrico y dictado
+              Diagnóstico electrónico multimarca, laboratorio de fluidos S.O.S., cálculo de potencia y dictado
             </p>
           </div>
         </div>
@@ -398,10 +398,10 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
               type="button"
               onClick={onOpenTemplatesModal}
               className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-              title="Cargar protocolos oficiales CAT PM1, PM2, PM3, PM4 o Banco de Carga"
+              title="Cargar protocolos oficiales PM1, PM2, PM3, PM4 o Pruebas de Carga"
             >
               <Layers className="w-3.5 h-3.5 text-amber-400" />
-              <span>Plantillas CAT</span>
+              <span>Plantillas Técnicas</span>
             </button>
           )}
 
@@ -410,7 +410,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
               type="button"
               onClick={onOpenDtcModal}
               className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-              title="Decodificador de Códigos de Falla MID, CID y FMI (CAT ET)"
+              title="Decodificador de Códigos de Falla CAT ET, Cummins, Perkins, J1939"
             >
               <Zap className="w-3.5 h-3.5 text-amber-400" />
               <span>Códigos DTC</span>
@@ -446,7 +446,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({
               type="button"
               onClick={onOpenVoiceModal}
               className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition flex items-center gap-1.5 shadow-sm cursor-pointer"
-              title="Dictado por Voz con Terminología Técnica Caterpillar"
+              title="Dictado por Voz con Terminología Técnica Multimarca"
             >
               <Mic className="w-3.5 h-3.5" />
               <span>Dictado por Voz</span>

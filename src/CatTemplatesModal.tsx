@@ -145,6 +145,85 @@ export const CAT_TEMPLATES: CatReportTemplate[] = [
     }
   },
   {
+    id: 'pm_cummins_500h',
+    title: 'Mantenimiento Preventivo Cummins PowerGen (500 Horas)',
+    levelBadge: 'CUMMINS 500 HRS',
+    badgeColor: 'bg-red-600 text-white',
+    category: 'Preventivo',
+    description: 'Servicio para plantas de generación Cummins QSK / QSL: Filtros Fleetguard, lubricante Valvoline y calibración.',
+    data: {
+      encabezado_venequip: {
+        empresa: 'CONSORCIO DE COGESTIÓN VENEQUIP S.A.',
+        rif: 'J404644865',
+        sucursal: 'SUCURSAL PRINCIPAL GUACARA',
+        fecha: new Date().toISOString().split('T')[0],
+        numero_servicio: 'S' + Math.floor(1000 + Math.random() * 9000),
+        actividad: 'Mantenimiento Preventivo 500 Horas Generador Cummins',
+        cliente: '',
+        localizacion: '',
+        fabricante: 'CUMMINS POWER GENERATION',
+        modelo: 'QSK60-G4 (2000 kVA)',
+        serial_equipo: '',
+        serial_motor: '',
+        horas_motor: '500',
+        horas_panel: '500'
+      },
+      secciones_informe: {
+        "1_solicitud_cliente": "Servicio de mantenimiento preventivo de 500 horas para planta de emergencia Cummins QSK60.",
+        "2_condiciones_fallas": "Generador en reposo con precalentador activo (45°C). Baterías en 26.8 VDC en flotación. Sin códigos de falla activos.",
+        "3_actividades_efectuadas": "1. Drenaje de aceite del cárter de motor (378 Litros).\n2. Reemplazo de 4 filtros de lubricante de flujo pleno Fleetguard LF14000NN.\n3. Reemplazo de 2 filtros de combustible con trampa de agua FS1006.\n4. Reemplazo de filtros de agua DCA4 / WF2075 para protección contra corrosión.\n5. Llenado con aceite diésel Valvoline Premium Blue 15W-40.\n6. Purga del sistema de inyección de combustible Cummins HPI-PT.\n7. Prueba de arranque en vacío y registro de parámetros en controlador PowerCommand 3.3.",
+        herramientas_utilizadas: [
+          { nombre: 'Adaptador Cummins Inline 7 / INSITE', numero_parte: 'INLINE-7', cantidad: 1 },
+          { nombre: 'Juego de Llaves de Filtros Pesados', numero_parte: 'HD-900', cantidad: 1 },
+          { nombre: 'Multímetro Industrial Fluke 87V', numero_parte: '9U-7330', cantidad: 1 }
+        ],
+        "4_fallas_detectadas": "Equipo en perfectas condiciones de operación. Presión de lubricación: 65 PSI a 1800 RPM.",
+        "5_causas_fallas": "No aplica. Servicio preventivo programado.",
+        "6_conclusiones_recomendaciones": "Planta Cummins QSK60 operativa al 100%. Se recomienda revisar apriete de bornes de potencia y programar próximo servicio PM a las 1000 horas.",
+        "7_registro_fotografico": []
+      }
+    }
+  },
+  {
+    id: 'heavy_machinery_insp',
+    title: 'Inspección Integral de Maquinaria Pesada (Excavadora / Cargador)',
+    levelBadge: 'MAQUINARIA PESADA',
+    badgeColor: 'bg-amber-600 text-white',
+    category: 'Inspección',
+    description: 'Evaluación de sistema hidráulico, presiones de bomba, tren de rodaje/neumáticos y articulaciones.',
+    data: {
+      encabezado_venequip: {
+        empresa: 'CONSORCIO DE COGESTIÓN VENEQUIP S.A.',
+        rif: 'J404644865',
+        sucursal: 'SUCURSAL PRINCIPAL GUACARA',
+        fecha: new Date().toISOString().split('T')[0],
+        numero_servicio: 'S' + Math.floor(1000 + Math.random() * 9000),
+        actividad: 'Inspección Técnica de Sistemas Hidráulicos y Operatividad',
+        cliente: '',
+        localizacion: '',
+        fabricante: 'CATERPILLAR / MULTIMARCA',
+        modelo: 'EXCAVADORA 336D2 L',
+        serial_equipo: '',
+        serial_motor: '',
+        horas_motor: '4250',
+        horas_panel: '4250'
+      },
+      secciones_informe: {
+        "1_solicitud_cliente": "Evaluación técnica de rendimiento hidráulico y detección de lentitud en ciclos de excavación.",
+        "2_condiciones_fallas": "Equipo presenta leve lentitud al accionar simultáneamente pluma (boom) y brazo (stick).",
+        "3_actividades_efectuadas": "1. Conexión de manómetros de alta presión (0-6000 PSI) en tomas de prueba de bomba hidráulica principal.\n2. Medición de presión de alivio principal (Main Relief Pressure): 5050 PSI (Dentro de especificación: 5075 ± 75 PSI).\n3. Medición de presión piloto: 580 PSI.\n4. Ajuste de calibración de válvulas de control de flujo proporcional NFC (Negative Flow Control).\n5. Inspección de tren de rodaje: Desgaste de zapatas al 35%, rodillos superiores e inferiores sin fugas de aceite de por vida.",
+        herramientas_utilizadas: [
+          { nombre: 'Grupo de Manómetros Hidráulicos de Alta Presión', numero_parte: '1U-5481', cantidad: 1 },
+          { nombre: 'Kit de Calibres y Medidor de Desgaste de Cadenas', numero_parte: '5P-8617', cantidad: 1 }
+        ],
+        "4_fallas_detectadas": "Descalibración menor en señal de control de presión negativa (NFC) en el banco de válvulas principal.",
+        "5_causas_fallas": "Ajuste natural por vibración y horas de trabajo continuas.",
+        "6_conclusiones_recomendaciones": "Se restablecieron los tiempos de ciclo nominales de la máquina. El equipo queda 100% operativo en frente de trabajo.",
+        "7_registro_fotografico": []
+      }
+    }
+  },
+  {
     id: 'load_bank_test',
     title: 'Prueba de Banco de Carga Resistivo (Load Bank 100%)',
     levelBadge: 'BANCO DE CARGA',
@@ -212,14 +291,14 @@ export const CatTemplatesModal: React.FC<CatTemplatesModalProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-lg font-black text-white tracking-wide">
-                  Plantillas Rápidas de Informes Técnicos Caterpillar
+                  Plantillas Rápidas de Informes Técnicos Multimarca
                 </h2>
                 <span className="bg-amber-400/20 text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-400/30">
                   Estándar Venequip
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Carga instantánea de protocolos oficiales de mantenimiento preventivo, afinación y pruebas de carga
+                Carga instantánea de protocolos oficiales de mantenimiento preventivo, afinación, maquinaria pesada y pruebas de carga
               </p>
             </div>
           </div>

@@ -64,9 +64,18 @@ export const DEFAULT_MODELOS_CAT: string[] = [
   'CAT 3306 (200 kVA)',
   'CAT 3126 (150 kVA)',
   'CAT G3520C (Gas Natural)',
-  'CAT D399',
-  'CAT C9 ACERT (300 kVA)',
-  'CAT C4.4 (100 kVA)'
+  'CAT Excavadora 320D / 336D',
+  'CAT Cargador Frontal 950H / 980H',
+  'CAT Tractor D6T / D8T / D9T',
+  'Cummins QSK60-G4 (2250 kVA)',
+  'Cummins QSK23 / QSK19 (750-1000 kVA)',
+  'Cummins QSL9 / QSB6.7 (250-350 kVA)',
+  'Perkins 4016-61TRG3 (2000 kVA)',
+  'Perkins 2806A-E18TAG2 (700 kVA)',
+  'Perkins 1104A / 1106A (100-200 kVA)',
+  'Detroit Diesel Serie 60 / DDC 2000',
+  'John Deere PowerTech 6068 / 6090',
+  'Komatsu Motor SAA6D125E / SAA6D140E'
 ];
 
 export const DEFAULT_SUCURSALES: string[] = [
@@ -81,23 +90,25 @@ export const DEFAULT_SUCURSALES: string[] = [
 ];
 
 export const DEFAULT_HERRAMIENTAS: Array<{ nombre: string; numero_parte: string; cantidad: number }> = [
-  { nombre: 'LapTop Diagnóstica Caterpillar Electronic Technician (CAT ET)', numero_parte: '466-6258', cantidad: 1 },
-  { nombre: 'Adaptador de Comunicaciones CAT Comm Adapter III', numero_parte: '317-7484', cantidad: 1 },
-  { nombre: 'Multímetro Digital Industrial Fluke 87V / CAT', numero_parte: '9U-7330', cantidad: 1 },
+  { nombre: 'LapTop Diagnóstica CAT ET / Cummins INSITE / Perkins EST', numero_parte: '466-6258', cantidad: 1 },
+  { nombre: 'Adaptador de Comunicaciones CAT Comm Adapter III / Inline 7', numero_parte: '317-7484', cantidad: 1 },
+  { nombre: 'Multímetro Digital Industrial Fluke 87V CAT', numero_parte: '9U-7330', cantidad: 1 },
   { nombre: 'Grupo de Manómetros de Presión Hidráulica y Combustible', numero_parte: '1U-5481', cantidad: 1 },
   { nombre: 'Llave Dinamométrica de Torque 1/2" (50-250 lb-ft)', numero_parte: '2P-8250', cantidad: 1 },
-  { nombre: 'Tacómetro Digital Fotoeléctrico / Contacto', numero_parte: '9U-7400', cantidad: 1 },
+  { nombre: 'Tacómetro Digital Fotoeléctrico y de Contacto', numero_parte: '9U-7400', cantidad: 1 },
   { nombre: 'Probador de Baterías y Sistema de Carga 12V/24V', numero_parte: '225-8266', cantidad: 1 },
-  { nombre: 'Megóhmetro Probador de Aislamiento 1000V (Megger)', numero_parte: '257-9140', cantidad: 1 },
-  { nombre: 'Cámara Termográfica de Infrarrojos Flir / CAT', numero_parte: '396-8000', cantidad: 1 },
-  { nombre: 'Grupo Indicador de Dial y Base Magnética para Alineación', numero_parte: '8T-5096', cantidad: 1 },
+  { nombre: 'Megóhmetro Probador de Aislamiento 1000V Fluke/Megger', numero_parte: '257-9140', cantidad: 1 },
+  { nombre: 'Cámara Termográfica de Infrarrojos Fluke/CAT', numero_parte: '396-8000', cantidad: 1 },
+  { nombre: 'Bomba de Muestreo de Fluidos y Aceites S.O.S.', numero_parte: '169-8373', cantidad: 1 },
   { nombre: 'Juego de Herramientas Manuales Mecánicas en Pulgadas / Métrico', numero_parte: '214-7330', cantidad: 1 }
 ];
 
 export const DEFAULT_ACTIVIDADES: string[] = [
   'DIAGNÓSTICO Y EVALUACIÓN TÉCNICA DE OPERATIVIDAD',
-  'MANTENIMIENTO PREVENTIVO PROGRAMADO 250 HORAS',
-  'MANTENIMIENTO PREVENTIVO PROGRAMADO 1000 HORAS',
+  'MANTENIMIENTO PREVENTIVO PROGRAMADO PM1 (250 HORAS)',
+  'MANTENIMIENTO PREVENTIVO PROGRAMADO PM2 (500 HORAS)',
+  'MANTENIMIENTO PREVENTIVO PROGRAMADO PM3 (1000 HORAS)',
+  'MANTENIMIENTO PREVENTIVO PROGRAMADO PM4 (2000 HORAS / OVERHAUL)',
   'CORRECCIÓN DE FALLA EN SISTEMA DE GENERACIÓN Y CONTROL',
   'OVERHAUL MAYOR Y REACONDICIONAMIENTO GENERAL',
   'CALIBRACIÓN DE VÁLVULAS, INYECTORES Y SINCRONIZACIÓN',
@@ -123,10 +134,10 @@ export const DEFAULT_USERS: LocalUser[] = [
     uid: 'admin_mlinares',
     email: 'mlinares@ccvenequip.com',
     password: 'admin',
-    name: 'M. LINARES',
+    name: 'MAURICIO LINARES',
     role: 'admin',
     status: 'active',
-    specialty: 'Administrador Principal de Operaciones y Servicios',
+    specialty: 'Director General / Propietario - Consorcio Venequip S.A.',
     phone: '+58 414 7654321',
     createdAt: '2026-01-01T00:00:00.000Z',
   },
@@ -150,7 +161,7 @@ export const DEFAULT_USERS: LocalUser[] = [
     name: 'Usuario de Prueba Venequip',
     role: 'technician',
     status: 'active',
-    specialty: 'Técnico Especialista de Pruebas Caterpillar',
+    specialty: 'Técnico Especialista de Servicios Multimarca',
     phone: '+58 412 9876543',
     createdAt: '2026-01-01T00:00:00.000Z',
   }

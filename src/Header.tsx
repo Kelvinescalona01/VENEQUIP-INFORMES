@@ -98,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="hidden lg:block h-6 w-px bg-slate-200" />
             <div className="hidden lg:flex flex-col">
               <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">
-                Informes Técnicos CAT
+                Informes Técnicos Multimarca
               </span>
               <span className="text-[9px] text-amber-700 font-semibold">
                 Consorcio Venequip S.A.

@@ -60,7 +60,7 @@ export const LoginScreen: React.FC = () => {
         </div>
         <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-slate-300 bg-slate-900/90 px-3.5 py-2 rounded-xl border border-slate-800">
           <ShieldCheck className="w-4 h-4 text-amber-400" />
-          <span>Sistema Integral de Informes Técnicos CAT</span>
+          <span>Sistema Integral de Informes Técnicos Multimarca</span>
         </div>
       </header>
 
@@ -185,64 +185,15 @@ export const LoginScreen: React.FC = () => {
               <span>Ingresar con Google Workspace</span>
             </button>
 
-            <div className="pt-2 border-t border-slate-100 space-y-2">
-              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">
-                Acceso Rápido Autorizado
-              </div>
-              <div className="grid grid-cols-1 gap-1.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('kescalonaccv@gmail.com');
-                    setPassword('admin');
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 transition flex items-center justify-between text-[11px] cursor-pointer"
-                >
-                  <div>
-                    <span className="font-bold text-slate-900">👑 K. Escalona (Admin Principal)</span>
-                    <span className="block text-[10px] text-slate-500 font-mono">kescalonaccv@gmail.com</span>
-                  </div>
-                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Auto-Llenar</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('mlinares@ccvenequip.com');
-                    setPassword('admin');
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 transition flex items-center justify-between text-[11px] cursor-pointer"
-                >
-                  <div>
-                    <span className="font-bold text-slate-900">👑 M. Linares (Admin Principal)</span>
-                    <span className="block text-[10px] text-slate-500 font-mono">mlinares@ccvenequip.com</span>
-                  </div>
-                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Auto-Llenar</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('prueba@venequip.com');
-                    setPassword('venequip2026');
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 transition flex items-center justify-between text-[11px] cursor-pointer"
-                >
-                  <div>
-                    <span className="font-bold text-slate-900">🔧 Venequip (Usuario de Prueba)</span>
-                    <span className="block text-[10px] text-slate-500 font-mono">prueba@venequip.com</span>
-                  </div>
-                  <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">Auto-Llenar</span>
-                </button>
-              </div>
-            </div>
-
           </div>
 
           {/* Card Footer */}
           <div className="bg-slate-50 border-t border-slate-100 p-3.5 text-[11px] text-slate-500 text-center space-y-0.5">
-            <p className="text-[10px] text-slate-400">
-              RIF: J404644865 • Consorcio de Cogestión Venequip S.A.
+            <p className="text-[10px] text-slate-500 font-medium">
+              Consorcio de Cogestión Venequip S.A. • RIF: J-40464486-5
+            </p>
+            <p className="text-[9px] text-slate-400">
+              Servicios Técnicos Multimarca • Maquinarias, Motores y Generación
             </p>
           </div>
 
@@ -251,7 +202,7 @@ export const LoginScreen: React.FC = () => {
 
       {/* Footer */}
       <footer className="py-4 text-center text-xs text-slate-500 relative z-10">
-        <p>© {new Date().getFullYear()} Venequip S.A. Plataforma Corporativa de Informes Técnicos de Servicio Caterpillar.</p>
+        <p>© {new Date().getFullYear()} Venequip S.A. Plataforma Corporativa de Informes Técnicos de Servicio Multimarca.</p>
       </footer>
 
     </div>

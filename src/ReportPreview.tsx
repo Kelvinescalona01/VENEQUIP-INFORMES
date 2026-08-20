@@ -101,7 +101,7 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({
                 Vista Previa Oficial del Documento
               </h2>
               <p className="text-[11px] text-slate-500 font-medium">
-                Diseño de Impresión Corporativo A4 • Caterpillar / Venequip
+                Diseño de Impresión Corporativo A4 • Venequip Multimarca
               </p>
             </div>
           </div>

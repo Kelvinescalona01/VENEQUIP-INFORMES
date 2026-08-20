@@ -68,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             parsed.role = 'admin';
             localStorage.setItem('venequip_auth_user', JSON.stringify(parsed));
           } else if (emailLower === 'mlinares@ccvenequip.com') {
-            parsed.name = 'M. LINARES';
+            parsed.name = 'MAURICIO LINARES';
             parsed.role = 'admin';
             localStorage.setItem('venequip_auth_user', JSON.stringify(parsed));
           }
@@ -130,13 +130,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const emailLower = (result.user.email || '').toLowerCase();
         const isMaster = emailLower === 'kescalonaccv@gmail.com' || emailLower === 'escalonabyby08@gmail.com';
+        const isOwner = emailLower === 'mlinares@ccvenequip.com';
 
         const userObj: UserProfile = {
           id: Date.now(),
           uid: result.user.uid,
           email: result.user.email || 'usuario@venequip.com',
-          name: isMaster ? 'KELVIN ESCALONA' : (result.user.displayName || result.user.email?.split('@')[0] || 'Usuario Venequip'),
-          role: isMaster ? 'admin' : 'technician',
+          name: isOwner ? 'MAURICIO LINARES' : isMaster ? 'KELVIN ESCALONA' : (result.user.displayName || result.user.email?.split('@')[0] || 'Usuario Venequip'),
+          role: (isMaster || isOwner) ? 'admin' : 'technician',
           status: 'active',
         };
 

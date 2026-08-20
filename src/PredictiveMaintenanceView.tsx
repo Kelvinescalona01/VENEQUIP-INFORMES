@@ -185,15 +185,15 @@ export const PredictiveMaintenanceView: React.FC<PredictiveMaintenanceViewProps>
               <Calculator className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-slate-900">Calculadora Rápida de Ciclo de Mantenimiento Preventivo CAT</h3>
-              <p className="text-xs text-slate-600">Simula cualquier horómetro para consultar qué mantenimiento corresponde según Caterpillar.</p>
+              <h3 className="text-sm font-black text-slate-900">Calculadora Rápida de Ciclo de Mantenimiento Preventivo Multimarca</h3>
+              <p className="text-xs text-slate-600">Simula cualquier horómetro para consultar qué mantenimiento corresponde (CAT, Cummins, Perkins, Detroit).</p>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="text-[11px] font-bold text-slate-700 block mb-1">Modelo del Equipo CAT</label>
+            <label className="text-[11px] font-bold text-slate-700 block mb-1">Modelo de Equipo / Motor</label>
             <input
               type="text"
               value={calcModel}
