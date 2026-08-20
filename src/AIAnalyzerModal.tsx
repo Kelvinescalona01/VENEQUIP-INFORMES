@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { 
   Sparkles, 
   Upload, 
@@ -8,23 +8,21 @@ import {
   Loader2, 
   Image as ImageIcon, 
   Camera,
-  Terminal,
-  Play,
+  Calculator,
   Copy,
   Check,
-  Download,
   MessageSquare,
   Send,
   Zap,
-  Sliders,
   RotateCcw,
   CheckCircle2,
   Cpu,
-  HelpCircle,
+  Activity,
+  Sliders,
   ChevronRight
 } from 'lucide-react';
 import { InformeTecnico } from './types';
-import { executePythonCode, generateGeminiPython, chatGeminiUniversal } from './geminiService';
+import { generateEngineeringCalculation, chatGeminiUniversal } from './geminiService';
 
 interface AIAnalyzerModalProps {
   isOpen: boolean;
@@ -35,195 +33,6 @@ interface AIAnalyzerModalProps {
   onInsertTechnicalText?: (sectionKey: string, text: string) => void;
 }
 
-// Built-in Python Diagnostics Templates for Caterpillar Machinery & Power Generation
-const PYTHON_TEMPLATES = [
-  {
-    id: 'derating',
-    name: '⚡ Curva de Potencia & Derating Cat (Altitud / Temp)',
-    description: 'Calcula pérdida de potencia por altitud (msnm) y temperatura ambiente según ISO 3046 / Cat SIS.',
-    code: `# CÁLCULO DE POTENCIA EFECTIVA Y DERATING CATERPILLAR
-# Basado en estándares ISO 3046 / Caterpillar SIS
-
-modelo_motor = "CAT C15 ACERT"
-potencia_nominal_kw = 400.0  # kW nominales a nivel del mar
-factor_potencia = 0.80
-altitud_msnm = 2200.0        # Metros sobre el nivel del mar
-temp_ambiente_c = 38.0       # Grados Celsius en sala / faena
-
-# Factor de derating por altitud (1% cada 100m sobre 1000m)
-derating_altitud = 0.0
-if altitud_msnm > 1000.0:
-    derating_altitud = ((altitud_msnm - 1000.0) / 100.0) * 0.01
-
-# Factor de derating por temperatura (1% cada 5°C sobre 25°C)
-derating_temp = 0.0
-if temp_ambiente_c > 25.0:
-    derating_temp = ((temp_ambiente_c - 25.0) / 5.0) * 0.01
-
-derating_total = min(derating_altitud + derating_temp, 0.40)
-factor_disponibilidad = 1.0 - derating_total
-potencia_disponible_kw = potencia_nominal_kw * factor_disponibilidad
-potencia_disponible_kva = potencia_disponible_kw / factor_potencia
-
-print("=" * 60)
-print(f"DIAGNÓSTICO ELECTROMECÁNICO VENEQUIP: {modelo_motor}")
-print("=" * 60)
-print(f"Potencia Nominal de Placa:      {potencia_nominal_kw:.2f} kW ({potencia_nominal_kw/factor_potencia:.2f} kVA)")
-print(f"Condiciones de Operación:       {altitud_msnm:.0f} msnm | {temp_ambiente_c:.1f} °C")
-print(f"Pérdida por Altitud:            -{derating_altitud*100:.2f} %")
-print(f"Pérdida por Temperatura:        -{derating_temp*100:.2f} %")
-print(f"Derating Total Aplicable:       -{derating_total*100:.2f} %")
-print("-" * 60)
-print(f"POTENCIA MÁXIMA DISPONIBLE:     {potencia_disponible_kw:.2f} kW ({potencia_disponible_kva:.2f} kVA)")
-print("=" * 60)
-if derating_total > 0.15:
-    print("VEREDICTO: Se requiere ajuste de carga operacional para evitar sobrecalentamiento y humo negro.")
-else:
-    print("VEREDICTO: Condiciones de desclasificación dentro del margen operativo seguro.")
-`
-  },
-  {
-    id: 'fuel',
-    name: '⛽ Cálculo de Consumo de Combustible Cat (L/h según Carga)',
-    description: 'Determina el consumo horario, autonomía del tanque y costo operativo a distintos regímenes.',
-    code: `# ANÁLISIS DE EFICIENCIA Y CONSUMO ESPECÍFICO DE DIESEL
-# Consorcio de Cogestión Venequip S.A.
-
-modelo = "CAT 3512B / Generador 1250 kVA"
-capacidad_tanque_litros = 2000.0
-horas_trabajo_dia = 12.0
-porcentaje_carga = 75.0  # Carga promedio al 75%
-
-# Tasa de consumo específico aproximada Cat (0.245 L/kWh)
-potencia_nominal_kw = 1000.0
-potencia_entregada_kw = potencia_nominal_kw * (porcentaje_carga / 100.0)
-consumo_litros_hora = potencia_entregada_kw * 0.245
-consumo_galones_hora = consumo_litros_hora / 3.78541
-
-consumo_diario = consumo_litros_hora * horas_trabajo_dia
-autonomia_horas = capacidad_tanque_litros / consumo_litros_hora
-
-print("=" * 60)
-print(f"BALANCE DE COMBUSTIBLE VENEQUIP: {modelo}")
-print("=" * 60)
-print(f"Régimen de Operación:          {porcentaje_carga:.1f}% ({potencia_entregada_kw:.1f} kW)")
-print(f"Consumo Horario Calculado:     {consumo_litros_hora:.2f} Litros/hora ({consumo_galones_hora:.2f} GPH)")
-print(f"Consumo por Jornada ({horas_trabajo_dia:.0f}h):      {consumo_diario:.2f} Litros")
-print(f"Autonomía del Tanque ({capacidad_tanque_litros:.0f}L):   {autonomia_horas:.1f} Horas de Servicio Continuo")
-print("=" * 60)
-print("RECOMENDACIÓN: Realizar drenaje de agua del separador primario cada 50 horas de consumo continuo.")
-`
-  },
-  {
-    id: 'megger',
-    name: '🔌 Aislamiento Megger (IEEE 43 - DAR & IP)',
-    description: 'Evalúa Índice de Polarización (IP = R10min/R1min) y Razón de Absorción Dieléctrica (DAR).',
-    code: `# EVALUACIÓN DE RESISTENCIA DE AISLAMIENTO SEGÚN NORMA IEEE 43
-# Ensayos de Megóhmetro en Estator / Generador Principal
-
-voltaje_prueba_vdc = 1000.0 # Voltios DC aplicados
-r_30s_mohm = 120.0          # Resistencia a los 30 segundos (MΩ)
-r_60s_mohm = 190.0          # Resistencia a los 60 segundos (MΩ)
-r_10min_mohm = 450.0        # Resistencia a los 10 minutos (MΩ)
-
-dar = r_60s_mohm / r_30s_mohm
-ip = r_10min_mohm / r_60s_mohm
-
-print("=" * 60)
-print("INSPECCIÓN DIELÉCTRICA DE AISLAMIENTO ELÉCTRICO")
-print("=" * 60)
-print(f"Tensión de Prueba:             {voltaje_prueba_vdc:.0f} V DC")
-print(f"R30s: {r_30s_mohm} MΩ | R60s: {r_60s_mohm} MΩ | R10min: {r_10min_mohm} MΩ")
-print(f"DAR (R60s / R30s):             {dar:.2f}")
-print(f"Índice Polarización (IP):      {ip:.2f}")
-print("-" * 60)
-
-# Veredicto normativo IEEE 43
-if ip >= 2.0 and dar >= 1.6:
-    veredicto = "AISLAMIENTO EXCELENTE (Sin humedad ni contaminación iónica)"
-elif ip >= 1.5 and dar >= 1.4:
-    veredicto = "AISLAMIENTO BUENO (Apto para servicio normal continuo)"
-elif ip >= 1.0:
-    veredicto = "AISLAMIENTO DUDOSO (Presencia leve de humedad. Requiere secado y limpieza)"
-else:
-    veredicto = "PELIGRO: AISLAMIENTO DEFICIENTE (Riesgo inminente de cortocircuito a masa)"
-
-print(f"DIAGNÓSTICO NORMATIVO: {veredicto}")
-print("=" * 60)
-`
-  },
-  {
-    id: 'sos_fluids',
-    name: '🧪 Análisis de Muestras SOS & Metales de Desgaste (ppm)',
-    description: 'Diagnostica desgaste prematuro en cojinetes, camisas y anillos comparando con tablas Caterpillar.',
-    code: `# EVALUACIÓN DE ANÁLISIS DE FLUIDOS S•O•S CATERPILLAR
-# Comparación de partículas por millón (PPM) vs umbrales permisibles
-
-horas_aceite = 250
-fe_ppm = 28.0    # Hierro (Camisas, cigüeñal, engranajes) - Límite Cat: 35 ppm
-cu_ppm = 12.0    # Cobre (Bujes, enfriador, cojinetes) - Límite Cat: 25 ppm
-pb_ppm = 8.0     # Plomo (Cojinetes de biela/bancada) - Límite Cat: 15 ppm
-cr_ppm = 3.0     # Cromo (Anillos de pistón) - Límite Cat: 8 ppm
-al_ppm = 6.0     # Aluminio (Pistones) - Límite Cat: 12 ppm
-si_ppm = 14.0    # Silicio (Polvo/Tierra externa) - Límite Cat: 20 ppm
-
-limites = {'Fe': 35.0, 'Cu': 25.0, 'Pb': 15.0, 'Cr': 8.0, 'Al': 12.0, 'Si': 20.0}
-valores = {'Fe': fe_ppm, 'Cu': cu_ppm, 'Pb': pb_ppm, 'Cr': cr_ppm, 'Al': al_ppm, 'Si': si_ppm}
-
-print("=" * 60)
-print(f"LABORATORIO S•O•S VENEQUIP - REPORTE DE DESGASTE ({horas_aceite} hrs)")
-print("=" * 60)
-alertas = []
-for metal, ppm in valores.items():
-    lim = limites[metal]
-    pct = (ppm / lim) * 100.0
-    estado = "NORMAL" if ppm <= lim else "¡ALERTA EXCEDIDO!"
-    if ppm > lim: alertas.append(metal)
-    print(f"Metal {metal:2s}:  {ppm:5.1f} ppm / Límite {lim:4.1f} ppm ({pct:5.1f}%) -> {estado}")
-
-print("-" * 60)
-if not alertas:
-    print("VEREDICTO: Aceite en condiciones óptimas de lubricación. Desgaste normal.")
-else:
-    print(f"VEREDICTO: Desgaste crítico en elementos con: {', '.join(alertas)}. Tomar contramedidas.")
-print("=" * 60)
-`
-  },
-  {
-    id: 'battery',
-    name: '🔋 Diagnóstico de Baterías 24V/12V en Arranque (Cranking)',
-    description: 'Evalúa caída de tensión bajo carga de arranque y resistencia interna del banco.',
-    code: `# EVALUACIÓN DE SISTEMA DE ARRANQUE Y BANCO DE BATERÍAS
-v_reposo = 25.6        # Voltios en circuito abierto (Reposado > 2 horas)
-v_cranking = 20.2      # Voltios mínimos durante el ciclo de arranque
-corriente_arranque_a = 650.0 # Amperios demandados por el motor de arranque
-temp_bateria_c = 28.0
-
-caida_tension_v = v_reposo - v_cranking
-resistencia_interna_mohm = (caida_tension_v / corriente_arranque_a) * 1000.0
-
-print("=" * 60)
-print("TEST DE CARGA DE BATERÍAS DE ARRANQUE (24V DC)")
-print("=" * 60)
-print(f"Tensión en Reposo:             {v_reposo:.2f} V DC (100% Carga Teórica)")
-print(f"Tensión en Pleno Cranking:     {v_cranking:.2f} V DC")
-print(f"Caída de Tensión (ΔV):         {caida_tension_v:.2f} V DC")
-print(f"Resistencia Interna del Banco: {resistencia_interna_mohm:.2f} mΩ")
-print("-" * 60)
-
-if v_cranking >= 19.5:
-    veredicto = "BANCO DE BATERÍAS APTO (Excelente entrega de corriente de arranque)"
-elif v_cranking >= 18.0:
-    veredicto = "CONDICIÓN ACEPTABLE (Monitorear densidad del electrolito y bornes)"
-else:
-    veredicto = "FALLA CRÍTICA: Tensión de arranque inferior a 18V. Riesgo de fallo de encendido."
-
-print(f"EVALUACIÓN: {veredicto}")
-print("=" * 60)
-`
-  }
-];
-
 export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
   isOpen,
   onClose,
@@ -232,7 +41,7 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
   currentReport,
   onInsertTechnicalText
 }) => {
-  const [activeTab, setActiveTab] = useState<'ocr' | 'python' | 'chat'>('ocr');
+  const [activeTab, setActiveTab] = useState<'ocr' | 'calc' | 'chat'>('ocr');
 
   // Tab 1: OCR State
   const [rawNotes, setRawNotes] = useState('');
@@ -243,60 +52,247 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Tab 2: Python Code & Engine State
-  const [selectedTemplateId, setSelectedTemplateId] = useState('derating');
-  const [pythonCode, setPythonCode] = useState(PYTHON_TEMPLATES[0].code);
-  const [pythonPrompt, setPythonPrompt] = useState('');
-  const [isGeneratingPython, setIsGeneratingPython] = useState(false);
-  const [isRunningPython, setIsRunningPython] = useState(false);
-  const [pythonOutput, setPythonOutput] = useState<{
-    stdout: string;
-    stderr: string;
-    exitCode: number | null;
-    executionTimeMs: number;
+  // Tab 2: JavaScript Technical Calculations State
+  const [calcModule, setCalcModule] = useState<'derating' | 'fuel' | 'megger' | 'sos' | 'battery' | 'unbalance' | 'custom'>('derating');
+  
+  // Derating State
+  const [deratingModel, setDeratingModel] = useState(currentReport?.encabezado_venequip?.modelo || 'Generador / Motor Diésel');
+  const [deratingKw, setDeratingKw] = useState(500);
+  const [deratingPf, setDeratingPf] = useState(0.8);
+  const [deratingAltitude, setDeratingAltitude] = useState(1800);
+  const [deratingTemp, setDeratingTemp] = useState(35);
+
+  // Fuel State
+  const [fuelTankLiters, setFuelTankLiters] = useState(1500);
+  const [fuelLoadPercent, setFuelLoadPercent] = useState(75);
+  const [fuelHoursPerDay, setFuelHoursPerDay] = useState(10);
+  const [fuelEngineKw, setFuelEngineKw] = useState(400);
+
+  // Megger State
+  const [meggerTestVoltage, setMeggerTestVoltage] = useState(1000);
+  const [meggerR30s, setMeggerR30s] = useState(120);
+  const [meggerR60s, setMeggerR60s] = useState(195);
+  const [meggerR10min, setMeggerR10min] = useState(460);
+
+  // SOS Fluid State
+  const [sosFe, setSosFe] = useState(24);
+  const [sosCu, setSosCu] = useState(11);
+  const [sosPb, setSosPb] = useState(7);
+  const [sosCr, setSosCr] = useState(2);
+  const [sosAl, setSosAl] = useState(5);
+  const [sosSi, setSosSi] = useState(12);
+
+  // Battery State
+  const [batteryVRest, setBatteryVRest] = useState(25.6);
+  const [batteryVCranking, setBatteryVCranking] = useState(20.4);
+  const [batteryAmps, setBatteryAmps] = useState(620);
+
+  // Voltage Unbalance State
+  const [vL1L2, setVL1L2] = useState(480);
+  const [vL2L3, setVL2L3] = useState(478);
+  const [vL3L1, setVL3L1] = useState(482);
+
+  // AI Custom Engineering Prompt State
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [isGeneratingCalc, setIsGeneratingCalc] = useState(false);
+  const [customCalcResult, setCustomCalcResult] = useState<{
+    title: string;
+    explanation: string;
+    calculationText: string;
+    expectedOutcome: string;
   } | null>(null);
-  const [copiedCode, setCopiedCode] = useState(false);
+
+  const [copiedText, setCopiedText] = useState(false);
   const [insertedSuccess, setInsertedSuccess] = useState(false);
 
   // Tab 3: Chat State
+  const [chatInput, setChatInput] = useState('');
+  const [isChatSending, setIsChatSending] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'gemini'; text: string; time: string }>>([
     {
       sender: 'gemini',
-      text: '¡Hola! Soy el Asistente Técnico y de Ingeniería Venequip con IA Gemini 3.7. ¿En qué diagnóstico, código de falla Caterpillar, prueba electromecánica o cálculo en Python te puedo ayudar hoy?',
+      text: `Hola, soy el Asistente Técnico y de Ingeniería de Venequip S.A. Puedes consultarme sobre procedimientos de servicio, especificaciones de torques, secuencias de diagnóstico multimarca (CAT, Cummins, Perkins, Detroit) o solicitar redacción técnica.`,
       time: new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })
     }
   ]);
-  const [chatInput, setChatInput] = useState('');
-  const [isChatSending, setIsChatSending] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
 
-  // File handling for OCR
-  const processFiles = (fileList: FileList | File[]) => {
-    const files = Array.from(fileList);
-    if (files.length === 0) return;
+  // Real-time pure JavaScript calculations
+  const deratingResult = useMemo(() => {
+    const altDerate = deratingAltitude > 1000 ? ((deratingAltitude - 1000) / 100) * 0.01 : 0;
+    const tempDerate = deratingTemp > 25 ? ((deratingTemp - 25) / 5) * 0.01 : 0;
+    const totalDerate = Math.min(altDerate + tempDerate, 0.40);
+    const availableKw = deratingKw * (1 - totalDerate);
+    const availableKva = availableKw / (deratingPf || 0.8);
+    const nominalKva = deratingKw / (deratingPf || 0.8);
 
-    files.forEach((file: File) => {
-      const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|bmp|heic|heif)$/i.test(file.name);
-      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    const text = `ANÁLISIS DE POTENCIA EFECTIVA Y DERATING (ISO 3046 / ESTÁNDAR VENEQUIP)
+Equipo/Motor: ${deratingModel}
+• Potencia Nominal de Placa: ${deratingKw.toFixed(1)} kW (${nominalKva.toFixed(1)} kVA @ FP ${deratingPf})
+• Condiciones Ambientales: ${deratingAltitude} msnm | ${deratingTemp} °C
+• Pérdida por Altitud: -${(altDerate * 100).toFixed(2)} %
+• Pérdida por Temperatura: -${(tempDerate * 100).toFixed(2)} %
+• Derating Total Aplicable: -${(totalDerate * 100).toFixed(2)} %
+------------------------------------------------------------
+• POTENCIA MÁXIMA DISPONIBLE: ${availableKw.toFixed(1)} kW (${availableKva.toFixed(1)} kVA)
+VEREDICTO: ${totalDerate > 0.15 ? 'Se requiere ajustar la carga operacional para evitar sobrecalentamiento y emisión de humos.' : 'Condiciones de operación seguras dentro del margen admisible.'}`;
 
-      if (!isImage && !isPdf) {
-        setErrorMsg(`El archivo ${file.name} no es una imagen o PDF compatible.`);
-        return;
-      }
+    return {
+      altDerate: altDerate * 100,
+      tempDerate: tempDerate * 100,
+      totalDerate: totalDerate * 100,
+      availableKw,
+      availableKva,
+      nominalKva,
+      text
+    };
+  }, [deratingKw, deratingPf, deratingAltitude, deratingTemp, deratingModel]);
 
+  const fuelResult = useMemo(() => {
+    const deliveredKw = fuelEngineKw * (fuelLoadPercent / 100);
+    const litersPerHour = deliveredKw * 0.245;
+    const gph = litersPerHour / 3.78541;
+    const dailyLiters = litersPerHour * fuelHoursPerDay;
+    const autonomyHours = fuelTankLiters > 0 && litersPerHour > 0 ? fuelTankLiters / litersPerHour : 0;
+
+    const text = `BALANCE DE COMBUSTIBLE Y RENDIMIENTO OPERACIONAL VENEQUIP
+• Potencia Entregada: ${deliveredKw.toFixed(1)} kW (${fuelLoadPercent}% de carga)
+• Consumo Específico: ${litersPerHour.toFixed(2)} Litros/hora (${gph.toFixed(2)} Galones/hora)
+• Consumo por Jornada (${fuelHoursPerDay} hrs): ${dailyLiters.toFixed(2)} Litros
+• Capacidad del Tanque: ${fuelTankLiters} Litros
+• Autonomía Estimada: ${autonomyHours.toFixed(1)} Horas de Operación Continua
+RECOMENDACIÓN: Drenar sedimentador de agua cada 50 horas de consumo continuo.`;
+
+    return { deliveredKw, litersPerHour, gph, dailyLiters, autonomyHours, text };
+  }, [fuelEngineKw, fuelLoadPercent, fuelHoursPerDay, fuelTankLiters]);
+
+  const meggerResult = useMemo(() => {
+    const dar = meggerR30s > 0 ? meggerR60s / meggerR30s : 0;
+    const ip = meggerR60s > 0 ? meggerR10min / meggerR60s : 0;
+    let verdict = 'AISLAMIENTO BUENO (Apto para servicio)';
+    let badgeClass = 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30';
+
+    if (ip >= 2.0 && dar >= 1.6) {
+      verdict = 'AISLAMIENTO EXCELENTE (Sin humedad ni contaminación iónica)';
+      badgeClass = 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30';
+    } else if (ip >= 1.5 && dar >= 1.4) {
+      verdict = 'AISLAMIENTO BUENO (Dentro de norma IEEE 43)';
+      badgeClass = 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30';
+    } else if (ip >= 1.0) {
+      verdict = 'AISLAMIENTO DUDOSO (Requiere proceso de secado o barnizado)';
+      badgeClass = 'text-amber-400 bg-amber-500/20 border-amber-500/30';
+    } else {
+      verdict = 'AISLAMIENTO DEFICIENTE (Peligro de cortocircuito a masa)';
+      badgeClass = 'text-rose-400 bg-rose-500/20 border-rose-500/30';
+    }
+
+    const text = `ENSAYO DE RESISTENCIA DE AISLAMIENTO DIELÉCTRICO (NORMA IEEE 43)
+• Tensión de Ensayo: ${meggerTestVoltage} V DC
+• Resistencia 30s: ${meggerR30s} MΩ | Resistencia 60s: ${meggerR60s} MΩ | Resistencia 10min: ${meggerR10min} MΩ
+• Razón de Absorción Dieléctrica (DAR = R60s / R30s): ${dar.toFixed(2)}
+• Índice de Polarización (IP = R10min / R60s): ${ip.toFixed(2)}
+------------------------------------------------------------
+DIAGNÓSTICO NORMATIVO: ${verdict}`;
+
+    return { dar, ip, verdict, badgeClass, text };
+  }, [meggerTestVoltage, meggerR30s, meggerR60s, meggerR10min]);
+
+  const sosResult = useMemo(() => {
+    const limits: Record<string, number> = { Fe: 35, Cu: 25, Pb: 15, Cr: 8, Al: 12, Si: 20 };
+    const values: Record<string, number> = { Fe: sosFe, Cu: sosCu, Pb: sosPb, Cr: sosCr, Al: sosAl, Si: sosSi };
+    const alerts: string[] = [];
+
+    Object.entries(values).forEach(([metal, val]) => {
+      if (val > limits[metal]) alerts.push(`${metal} (${val} ppm > ${limits[metal]} ppm)`);
+    });
+
+    const text = `ANÁLISIS DE FLUIDOS S.O.S. Y METALES DE DESGASTE
+• Hierro (Fe): ${sosFe} ppm [Límite: 35 ppm] ${sosFe > 35 ? '⚠️ ALERTA' : '✓ Normal'}
+• Cobre (Cu): ${sosCu} ppm [Límite: 25 ppm] ${sosCu > 25 ? '⚠️ ALERTA' : '✓ Normal'}
+• Plomo (Pb): ${sosPb} ppm [Límite: 15 ppm] ${sosPb > 15 ? '⚠️ ALERTA' : '✓ Normal'}
+• Cromo (Cr): ${sosCr} ppm [Límite: 8 ppm] ${sosCr > 8 ? '⚠️ ALERTA' : '✓ Normal'}
+• Aluminio (Al): ${sosAl} ppm [Límite: 12 ppm] ${sosAl > 12 ? '⚠️ ALERTA' : '✓ Normal'}
+• Silicio (Si): ${sosSi} ppm [Límite: 20 ppm] ${sosSi > 20 ? '⚠️ ALERTA CONTAMINACIÓN' : '✓ Normal'}
+------------------------------------------------------------
+VEREDICTO: ${alerts.length === 0 ? 'Aceite en condiciones normales de operación. Lubricación óptima.' : `Desgaste prematuro detectado en: ${alerts.join(', ')}.`}`;
+
+    return { alerts, text };
+  }, [sosFe, sosCu, sosPb, sosCr, sosAl, sosSi]);
+
+  const batteryResult = useMemo(() => {
+    const deltaV = batteryVRest - batteryVCranking;
+    const internalR = batteryAmps > 0 ? (deltaV / batteryAmps) * 1000 : 0;
+    let verdict = 'BANCO DE BATERÍAS APTO (Excelente entrega de corriente)';
+    let badgeClass = 'text-emerald-400 bg-emerald-500/20';
+
+    if (batteryVCranking >= 19.5) {
+      verdict = 'BANCO DE BATERÍAS APTO (Excelente respuesta de arranque)';
+      badgeClass = 'text-emerald-400 bg-emerald-500/20';
+    } else if (batteryVCranking >= 18.0) {
+      verdict = 'CONDICIÓN ACEPTABLE (Revisar apriete de bornes y sulfatación)';
+      badgeClass = 'text-amber-400 bg-amber-500/20';
+    } else {
+      verdict = 'FALLA CRÍTICA: Tensión de arranque insuficiente (<18V). Riesgo de fallo.';
+      badgeClass = 'text-rose-400 bg-rose-500/20';
+    }
+
+    const text = `TEST DE CARGA DE BATERÍAS DE ARRANQUE (24V DC)
+• Tensión en Reposo: ${batteryVRest.toFixed(2)} V DC
+• Tensión en Arranque (Cranking): ${batteryVCranking.toFixed(2)} V DC
+• Caída de Tensión (ΔV): ${deltaV.toFixed(2)} V DC
+• Resistencia Interna Estimada: ${internalR.toFixed(2)} mΩ
+------------------------------------------------------------
+EVALUACIÓN: ${verdict}`;
+
+    return { deltaV, internalR, verdict, badgeClass, text };
+  }, [batteryVRest, batteryVCranking, batteryAmps]);
+
+  const unbalanceResult = useMemo(() => {
+    const vAvg = (vL1L2 + vL2L3 + vL3L1) / 3;
+    const maxDev = Math.max(
+      Math.abs(vL1L2 - vAvg),
+      Math.abs(vL2L3 - vAvg),
+      Math.abs(vL3L1 - vAvg)
+    );
+    const unbalancePercent = vAvg > 0 ? (maxDev / vAvg) * 100 : 0;
+    const isOk = unbalancePercent <= 2.0;
+
+    const text = `MEDICIÓN DE DESBALANCE DE VOLTAJE TRIFÁSICO (NEMA MG-1)
+• Voltaje L1-L2: ${vL1L2} V AC | L2-L3: ${vL2L3} V AC | L3-L1: ${vL3L1} V AC
+• Voltaje Promedio: ${vAvg.toFixed(2)} V AC
+• Desviación Máxima: ${maxDev.toFixed(2)} V AC
+• Desbalance Calculado: ${unbalancePercent.toFixed(2)} % (Límite NEMA: 2.0%)
+------------------------------------------------------------
+VEREDICTO: ${isOk ? 'Tensión trifásica balanceada y conforme con NEMA MG-1.' : 'Desbalance elevado (> 2%). Riesgo de calentamiento excesivo en bobinados.'}`;
+
+    return { vAvg, maxDev, unbalancePercent, isOk, text };
+  }, [vL1L2, vL2L3, vL3L1]);
+
+  // Current calculation text to copy/insert
+  const activeCalculationText = useMemo(() => {
+    if (calcModule === 'custom' && customCalcResult) {
+      return `${customCalcResult.title}\n\n${customCalcResult.calculationText}\n\nVEREDICTO TÉCNICO:\n${customCalcResult.expectedOutcome}`;
+    }
+    if (calcModule === 'derating') return deratingResult.text;
+    if (calcModule === 'fuel') return fuelResult.text;
+    if (calcModule === 'megger') return meggerResult.text;
+    if (calcModule === 'sos') return sosResult.text;
+    if (calcModule === 'battery') return batteryResult.text;
+    if (calcModule === 'unbalance') return unbalanceResult.text;
+    return '';
+  }, [calcModule, customCalcResult, deratingResult, fuelResult, meggerResult, sosResult, batteryResult, unbalanceResult]);
+
+  // Handlers
+  const processFiles = (files: FileList) => {
+    Array.from(files).forEach((file) => {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          const resultStr = event.target.result as string;
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
           setAttachedFiles((prev) => [
             ...prev,
-            {
-              name: file.name,
-              mimeType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
-              data: resultStr
-            }
+            { data: reader.result as string, mimeType: file.type || 'image/jpeg', name: file.name }
           ]);
         }
       };
@@ -328,62 +324,30 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
     }
   };
 
-  // Python Execution Handler
-  const handleRunPython = async () => {
-    if (!pythonCode.trim()) return;
-    setIsRunningPython(true);
+  const handleGenerateCustomCalc = async () => {
+    if (!customPrompt.trim()) return;
+    setIsGeneratingCalc(true);
     setErrorMsg(null);
     try {
-      const res = await executePythonCode(pythonCode);
-      setPythonOutput({
-        stdout: res.stdout || '',
-        stderr: res.stderr || '',
-        exitCode: res.exitCode,
-        executionTimeMs: res.executionTimeMs || 0
-      });
-    } catch (err: any) {
-      setPythonOutput({
-        stdout: '',
-        stderr: err.message || 'Error al ejecutar Python.',
-        exitCode: 1,
-        executionTimeMs: 0
-      });
-    } finally {
-      setIsRunningPython(false);
-    }
-  };
-
-  // Python Generation with Gemini
-  const handleGeneratePythonWithGemini = async () => {
-    if (!pythonPrompt.trim()) return;
-    setIsGeneratingPython(true);
-    setErrorMsg(null);
-    try {
-      const res = await generateGeminiPython(
-        pythonPrompt,
-        currentReport?.encabezado_venequip || {},
-        true
+      const res = await generateEngineeringCalculation(
+        customPrompt,
+        currentReport?.encabezado_venequip || {}
       );
-
-      if (res.success && res.data?.pythonCode) {
-        setPythonCode(res.data.pythonCode);
-        if (res.executionResult) {
-          setPythonOutput(res.executionResult);
-        }
+      if (res.success && res.data) {
+        setCustomCalcResult(res.data);
       } else {
-        setErrorMsg(res.error || 'No se pudo generar el código Python.');
+        setErrorMsg(res.error || 'No se pudo generar el cálculo técnico.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error comunicando con Gemini.');
+      setErrorMsg(err.message || 'Error comunicando con el asistente de IA.');
     } finally {
-      setIsGeneratingPython(false);
+      setIsGeneratingCalc(false);
     }
   };
 
-  // Insert Python output into report
   const handleInsertIntoReport = (sectionKey: string) => {
-    if (!pythonOutput || !pythonOutput.stdout) return;
-    const outputText = `\n\n[ANÁLISIS Y CÁLCULO TÉCNICO EN PYTHON (MOTOR CATERPILLAR)]:\n${pythonOutput.stdout}`;
+    if (!activeCalculationText) return;
+    const outputText = `\n\n[CÁLCULO TÉCNICO Y DIAGNÓSTICO DE INGENIERÍA VENEQUIP]:\n${activeCalculationText}`;
     if (onInsertTechnicalText) {
       onInsertTechnicalText(sectionKey, outputText);
     }
@@ -391,7 +355,6 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
     setTimeout(() => setInsertedSuccess(false), 3000);
   };
 
-  // Chat Send Handler
   const handleSendChat = async () => {
     if (!chatInput.trim() || isChatSending) return;
     const userMsg = chatInput.trim();
@@ -409,7 +372,7 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
       const errorTime = new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
       setChatMessages(prev => [...prev, { 
         sender: 'gemini', 
-        text: 'Disculpa, ocurrió un error de comunicación con el servicio de IA Gemini. Por favor reintenta en unos momentos.', 
+        text: 'Disculpa, ocurrió un error de comunicación con el servicio de IA. Por favor reintenta en unos momentos.', 
         time: errorTime 
       }]);
     } finally {
@@ -425,12 +388,12 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
       id="modal-ai-analyzer-backdrop" 
       className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
       onClick={(e) => {
-        if (e.target === e.currentTarget && !isLoading && !isRunningPython && !isGeneratingPython) onClose();
+        if (e.target === e.currentTarget && !isLoading && !isGeneratingCalc) onClose();
       }}
     >
       <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl space-y-0 my-auto max-h-[94vh] flex flex-col animate-scaleUp">
         
-        {/* Top Corporate Header */}
+        {/* Corporate Header */}
         <div className="bg-slate-950 px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-3">
             <div className="bg-amber-400/20 text-amber-300 p-2 rounded-xl border border-amber-400/30 shrink-0">
@@ -439,20 +402,20 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm sm:text-base font-black text-slate-100">
-                  Suite de Inteligencia Artificial & Python
+                  Suite de Inteligencia Artificial & Motor de Cálculo Técnico
                 </h3>
-                <span className="text-[10px] bg-amber-400/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full font-mono font-bold">
-                  Gemini 3.7 Flash + Python 3
+                <span className="text-[10px] bg-amber-400/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full font-bold">
+                  Venequip Multimarca
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">
-                Consorcio de Cogestión Venequip S.A. • Ingesta OCR, scripts de diagnóstico y asistencia en tiempo real
+                Consorcio de Cogestión Venequip S.A. • Ingesta OCR, diagnósticos de ingeniería y asistencia en tiempo real
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            disabled={isLoading || isRunningPython}
+            disabled={isLoading || isGeneratingCalc}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
             title="Cerrar modal"
           >
@@ -460,7 +423,7 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Navigation Bar */}
+        {/* Tab Navigation */}
         <div className="bg-slate-950/60 border-b border-slate-800 px-4 flex items-center gap-2 overflow-x-auto shrink-0 py-2">
           <button
             type="button"
@@ -477,17 +440,17 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveTab('python')}
+            onClick={() => setActiveTab('calc')}
             className={`flex items-center gap-2 px-3 py-2 text-xs font-black rounded-lg transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'python'
+              activeTab === 'calc'
                 ? 'bg-amber-500 text-slate-950 shadow-md'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <Terminal className="w-4 h-4 text-emerald-400" />
-            <span>2. Diagnóstico & Código Python</span>
-            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] px-1.5 py-0.2 rounded font-mono">
-              Live
+            <Calculator className="w-4 h-4 text-emerald-400" />
+            <span>2. Diagnóstico & Cálculos de Ingeniería</span>
+            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] px-1.5 py-0.2 rounded font-bold">
+              Instantáneo
             </span>
           </button>
 
@@ -501,7 +464,7 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
             }`}
           >
             <MessageSquare className="w-4 h-4 text-sky-400" />
-            <span>3. Consultas SIS & Chat Técnico</span>
+            <span>3. Consultas Multimarca & Chat Técnico</span>
           </button>
         </div>
 
@@ -521,8 +484,6 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
         {/* TAB 1: OCR & INGESTA */}
         {activeTab === 'ocr' && (
           <form onSubmit={handleSubmitOCR} className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto flex-1">
-            
-            {/* Drag & Drop File Upload Area */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
@@ -552,7 +513,6 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
                 </div>
                 <p className="text-[11px] text-slate-500">Formatos soportados: JPG, PNG, WEBP, PDF (Sin límite de tamaño)</p>
                 
-                {/* Mobile Camera Direct Button */}
                 <div className="mt-2 flex flex-wrap gap-2 justify-center" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
@@ -565,7 +525,6 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
                 </div>
               </div>
 
-              {/* Hidden Inputs */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -583,7 +542,6 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
                 onChange={handleFileUpload}
               />
 
-              {/* Attached Files List */}
               {attachedFiles.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
                   {attachedFiles.map((file, idx) => (
@@ -601,15 +559,15 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
                             <FileText className="w-4 h-4" />
                           </div>
                         )}
-                        <span className="text-slate-200 truncate font-medium max-w-[180px] sm:max-w-[220px]">
-                          {file.name}
-                        </span>
+                        <span className="truncate font-medium text-slate-200">{file.name}</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setAttachedFiles(prev => prev.filter((_, i) => i !== idx))}
-                        className="text-slate-400 hover:text-rose-400 p-1 rounded transition-colors"
-                        title="Eliminar archivo"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAttachedFiles(prev => prev.filter((_, i) => i !== idx));
+                        }}
+                        className="text-slate-400 hover:text-rose-400 p-1"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -619,58 +577,55 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
               )}
             </div>
 
-            {/* Field Notes Area */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                2. Notas Rápidas de Campo o Datos de Voz (Opcional)
+                2. Notas Técnicas de Campo (Opcional)
               </label>
               <textarea
                 value={rawNotes}
                 onChange={(e) => setRawNotes(e.target.value)}
-                placeholder="Ejemplo: Se atendió planta CAT C15 en Planta Polar. Horómetro 4,250 hrs. Tensión 440V, frecuencia 60Hz. Falla detectada en solenoide de parada y fuga leve en sello de bomba de agua..."
                 rows={3}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
+                placeholder="Escribe anotaciones rápidas, mediciones tomadas en sitio o datos adicionales..."
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
               />
             </div>
 
-            {/* Custom Instructions */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                3. Instrucciones Especiales para Gemini IA
+                3. Instrucciones de Enfoque para la Redacción (Opcional)
               </label>
               <input
                 type="text"
                 value={userInstructions}
                 onChange={(e) => setUserInstructions(e.target.value)}
-                placeholder="Ejemplo: Priorizar protocolo de mantenimiento PM2 de 500 horas y agregar lista de repuestos requeridos..."
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
+                placeholder="Ej: Enfatizar en cambio de sellos hidráulicos y calibración de presiones..."
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
               />
             </div>
 
-            {/* Action Buttons */}
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-end space-x-3">
+            <div className="pt-2 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isLoading}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                className="px-4 py-2.5 rounded-xl border border-slate-700 text-xs font-bold text-slate-300 hover:bg-slate-800 transition"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                disabled={isLoading}
-                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black flex items-center space-x-2 transition shadow-lg shadow-amber-500/20 disabled:opacity-50 cursor-pointer"
+                disabled={isLoading || (attachedFiles.length === 0 && !rawNotes.trim())}
+                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black flex items-center space-x-2 transition shadow-lg shadow-amber-500/20 disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                    <span>Analizando con Gemini 3.7...</span>
+                    <span>Analizando y Redactando con IA...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4 text-slate-950" />
-                    <span>Estructurar y Generar Informe Completo</span>
+                    <span>Estructurar Informe Oficial Venequip</span>
                   </>
                 )}
               </button>
@@ -678,233 +633,539 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
           </form>
         )}
 
-        {/* TAB 2: PYTHON DIAGNOSTICS & EXECUTION */}
-        {activeTab === 'python' && (
+        {/* TAB 2: INSTANT JAVASCRIPT ENGINEERING CALCULATIONS */}
+        {activeTab === 'calc' && (
           <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
             
-            {/* Top Bar: Template Selector & Prompt Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-300 mb-1">
-                  Plantillas de Diagnóstico Caterpillar / Venequip
-                </label>
-                <select
-                  value={selectedTemplateId}
-                  onChange={(e) => {
-                    const tId = e.target.value;
-                    setSelectedTemplateId(tId);
-                    const found = PYTHON_TEMPLATES.find(t => t.id === tId);
-                    if (found) {
-                      setPythonCode(found.code);
-                    }
-                  }}
-                  className="w-full bg-slate-950 border border-slate-700 text-xs text-amber-300 font-semibold rounded-xl p-2.5 focus:outline-none focus:border-amber-400"
+            {/* Calculation Module Selector */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs shrink-0">
+              {[
+                { id: 'derating', label: '⚡ Derating (Altitud/Temp)' },
+                { id: 'fuel', label: '⛽ Consumo & Autonomía' },
+                { id: 'megger', label: '🔌 Megóhmetro (IEEE 43)' },
+                { id: 'sos', label: '🧪 Metales S.O.S. (ppm)' },
+                { id: 'battery', label: '🔋 Banco Baterías (24V)' },
+                { id: 'unbalance', label: '⚡ Desbalance NEMA' },
+                { id: 'custom', label: '✨ Asistente IA Especial' },
+              ].map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setCalcModule(m.id as any)}
+                  className={`px-3 py-1.5 rounded-lg font-black transition-all whitespace-nowrap cursor-pointer ${
+                    calcModule === m.id
+                      ? 'bg-amber-500 text-slate-950 shadow'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
                 >
-                  {PYTHON_TEMPLATES.map(t => (
-                    <option key={t.id} value={t.id} className="bg-slate-900 text-slate-100">
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  {m.label}
+                </button>
+              ))}
+            </div>
 
-              {/* Gemini Python Code Generator */}
-              <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-300 mb-1">
-                  Generar Nuevo Cálculo en Python con Gemini IA
-                </label>
-                <div className="flex gap-1.5">
+            {/* MODULE: DERATING */}
+            {calcModule === 'derating' && (
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider">
+                    Cálculo de Derating por Altitud y Temperatura (ISO 3046)
+                  </h4>
+                  <span className="text-[11px] text-slate-400 font-mono">Reactivo en tiempo real</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Potencia Nominal (kW)</label>
+                    <input
+                      type="number"
+                      value={deratingKw}
+                      onChange={(e) => setDeratingKw(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-amber-300 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Factor de Potencia (FP)</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      value={deratingPf}
+                      onChange={(e) => setDeratingPf(Number(e.target.value) || 0.8)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Altitud (msnm)</label>
+                    <input
+                      type="number"
+                      value={deratingAltitude}
+                      onChange={(e) => setDeratingAltitude(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Temperatura Ambiente (°C)</label>
+                    <input
+                      type="number"
+                      value={deratingTemp}
+                      onChange={(e) => setDeratingTemp(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                  <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Derating Altitud</span>
+                    <span className="text-sm font-black text-rose-400">-{deratingResult.altDerate.toFixed(1)}%</span>
+                  </div>
+                  <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Derating Temp</span>
+                    <span className="text-sm font-black text-amber-400">-{deratingResult.tempDerate.toFixed(1)}%</span>
+                  </div>
+                  <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Derating Total</span>
+                    <span className="text-sm font-black text-rose-300">-{deratingResult.totalDerate.toFixed(1)}%</span>
+                  </div>
+                  <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Potencia Disponible</span>
+                    <span className="text-sm font-black text-emerald-400">{deratingResult.availableKw.toFixed(0)} kW</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODULE: FUEL */}
+            {calcModule === 'fuel' && (
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider">
+                    Balance de Combustible Diésel y Autonomía de Tanque
+                  </h4>
+                  <span className="text-[11px] text-slate-400 font-mono">Consumo específico ISO</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Potencia Motor (kW)</label>
+                    <input
+                      type="number"
+                      value={fuelEngineKw}
+                      onChange={(e) => setFuelEngineKw(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-amber-300 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">% Carga Operacional</label>
+                    <input
+                      type="number"
+                      value={fuelLoadPercent}
+                      onChange={(e) => setFuelLoadPercent(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Capacidad Tanque (L)</label>
+                    <input
+                      type="number"
+                      value={fuelTankLiters}
+                      onChange={(e) => setFuelTankLiters(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Horas Operación / Día</label>
+                    <input
+                      type="number"
+                      value={fuelHoursPerDay}
+                      onChange={(e) => setFuelHoursPerDay(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                  <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Consumo Horario</span>
+                    <span className="text-sm font-black text-amber-300">{fuelResult.litersPerHour.toFixed(1)} L/h</span>
+                  </div>
+                  <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Consumo Galones</span>
+                    <span className="text-sm font-black text-slate-300">{fuelResult.gph.toFixed(1)} GPH</span>
+                  </div>
+                  <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Consumo Diario</span>
+                    <span className="text-sm font-black text-rose-300">{fuelResult.dailyLiters.toFixed(0)} L/día</span>
+                  </div>
+                  <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Autonomía</span>
+                    <span className="text-sm font-black text-emerald-400">{fuelResult.autonomyHours.toFixed(1)} hrs</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODULE: MEGGER */}
+            {calcModule === 'megger' && (
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider">
+                    Ensayo de Aislamiento Dieléctrico Megóhmetro (Norma IEEE 43)
+                  </h4>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${meggerResult.badgeClass}`}>
+                    {meggerResult.verdict.split('(')[0]}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Tensión Ensayo (V DC)</label>
+                    <input
+                      type="number"
+                      value={meggerTestVoltage}
+                      onChange={(e) => setMeggerTestVoltage(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-amber-300 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">R 30s (MΩ)</label>
+                    <input
+                      type="number"
+                      value={meggerR30s}
+                      onChange={(e) => setMeggerR30s(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">R 60s (MΩ)</label>
+                    <input
+                      type="number"
+                      value={meggerR60s}
+                      onChange={(e) => setMeggerR60s(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">R 10min (MΩ)</label>
+                    <input
+                      type="number"
+                      value={meggerR10min}
+                      onChange={(e) => setMeggerR10min(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">DAR (R60s / R30s)</span>
+                    <span className="text-lg font-black text-emerald-400">{meggerResult.dar.toFixed(2)}</span>
+                    <span className="text-[10px] text-slate-500 block">Norma: ≥ 1.6 Excelente</span>
+                  </div>
+                  <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Índice Polarización (IP)</span>
+                    <span className="text-lg font-black text-emerald-400">{meggerResult.ip.toFixed(2)}</span>
+                    <span className="text-[10px] text-slate-500 block">Norma: ≥ 2.0 Excelente</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODULE: SOS FLUIDS */}
+            {calcModule === 'sos' && (
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider">
+                    Matriz de Análisis de Fluidos S.O.S. (Metales en ppm)
+                  </h4>
+                  <span className="text-[11px] text-slate-400 font-mono">Límites ASTM / Venequip</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">Hierro Fe (max 35)</label>
+                    <input
+                      type="number"
+                      value={sosFe}
+                      onChange={(e) => setSosFe(Number(e.target.value) || 0)}
+                      className={`w-full bg-slate-900 border rounded-lg p-2 text-xs font-bold ${sosFe > 35 ? 'border-rose-500 text-rose-400' : 'border-slate-700 text-emerald-400'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">Cobre Cu (max 25)</label>
+                    <input
+                      type="number"
+                      value={sosCu}
+                      onChange={(e) => setSosCu(Number(e.target.value) || 0)}
+                      className={`w-full bg-slate-900 border rounded-lg p-2 text-xs font-bold ${sosCu > 25 ? 'border-rose-500 text-rose-400' : 'border-slate-700 text-emerald-400'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">Plomo Pb (max 15)</label>
+                    <input
+                      type="number"
+                      value={sosPb}
+                      onChange={(e) => setSosPb(Number(e.target.value) || 0)}
+                      className={`w-full bg-slate-900 border rounded-lg p-2 text-xs font-bold ${sosPb > 15 ? 'border-rose-500 text-rose-400' : 'border-slate-700 text-emerald-400'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">Cromo Cr (max 8)</label>
+                    <input
+                      type="number"
+                      value={sosCr}
+                      onChange={(e) => setSosCr(Number(e.target.value) || 0)}
+                      className={`w-full bg-slate-900 border rounded-lg p-2 text-xs font-bold ${sosCr > 8 ? 'border-rose-500 text-rose-400' : 'border-slate-700 text-emerald-400'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">Aluminio Al (max 12)</label>
+                    <input
+                      type="number"
+                      value={sosAl}
+                      onChange={(e) => setSosAl(Number(e.target.value) || 0)}
+                      className={`w-full bg-slate-900 border rounded-lg p-2 text-xs font-bold ${sosAl > 12 ? 'border-rose-500 text-rose-400' : 'border-slate-700 text-emerald-400'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">Silicio Si (max 20)</label>
+                    <input
+                      type="number"
+                      value={sosSi}
+                      onChange={(e) => setSosSi(Number(e.target.value) || 0)}
+                      className={`w-full bg-slate-900 border rounded-lg p-2 text-xs font-bold ${sosSi > 20 ? 'border-rose-500 text-rose-400' : 'border-slate-700 text-emerald-400'}`}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODULE: BATTERY */}
+            {calcModule === 'battery' && (
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider">
+                    Diagnóstico de Banco de Baterías 24V DC en Arranque (Cranking)
+                  </h4>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${batteryResult.badgeClass}`}>
+                    {batteryResult.verdict.split('(')[0]}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Voltaje en Reposo (V DC)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={batteryVRest}
+                      onChange={(e) => setBatteryVRest(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-amber-300 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Voltaje en Cranking (V DC)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={batteryVCranking}
+                      onChange={(e) => setBatteryVCranking(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Corriente de Arranque (A)</label>
+                    <input
+                      type="number"
+                      value={batteryAmps}
+                      onChange={(e) => setBatteryAmps(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Caída de Tensión (ΔV)</span>
+                    <span className="text-lg font-black text-amber-400">{batteryResult.deltaV.toFixed(2)} V</span>
+                  </div>
+                  <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Resistencia Interna</span>
+                    <span className="text-lg font-black text-emerald-400">{batteryResult.internalR.toFixed(2)} mΩ</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODULE: UNBALANCE */}
+            {calcModule === 'unbalance' && (
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider">
+                    Desbalance de Voltaje Trifásico en Generadores (NEMA MG-1)
+                  </h4>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${unbalanceResult.isOk ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                    {unbalanceResult.isOk ? '✓ Balanceado (<2%)' : '⚠️ Desbalance Crítico'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Voltaje L1 - L2 (V AC)</label>
+                    <input
+                      type="number"
+                      value={vL1L2}
+                      onChange={(e) => setVL1L2(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-amber-300 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Voltaje L2 - L3 (V AC)</label>
+                    <input
+                      type="number"
+                      value={vL2L3}
+                      onChange={(e) => setVL2L3(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Voltaje L3 - L1 (V AC)</label>
+                    <input
+                      type="number"
+                      value={vL3L1}
+                      onChange={(e) => setVL3L1(Number(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">Voltaje Promedio</span>
+                    <span className="text-lg font-black text-slate-200">{unbalanceResult.vAvg.toFixed(1)} V AC</span>
+                  </div>
+                  <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-center">
+                    <span className="text-[10px] text-slate-400 block font-bold">% Desbalance NEMA</span>
+                    <span className={`text-lg font-black ${unbalanceResult.isOk ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {unbalanceResult.unbalancePercent.toFixed(2)} %
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODULE: CUSTOM AI ASSISTANT */}
+            {calcModule === 'custom' && (
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider">
+                    Asistente de Cálculos de Ingeniería Personalizados con IA
+                  </h4>
+                  <span className="text-[11px] text-slate-400 font-mono">Gemini Multimarca</span>
+                </div>
+
+                <div className="flex gap-2">
                   <input
                     type="text"
-                    value={pythonPrompt}
-                    onChange={(e) => setPythonPrompt(e.target.value)}
-                    placeholder="Ej: Calcular caída de tensión en cable de 150m..."
-                    className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    placeholder="Ej: Calcular calibre de conductor para 480V, 300 metros, 250A con caída < 3%..."
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        handleGeneratePythonWithGemini();
+                        handleGenerateCustomCalc();
                       }
                     }}
                   />
                   <button
                     type="button"
-                    onClick={handleGeneratePythonWithGemini}
-                    disabled={isGeneratingPython || !pythonPrompt.trim()}
-                    className="px-3 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 transition disabled:opacity-50 shrink-0 cursor-pointer shadow-sm"
+                    onClick={handleGenerateCustomCalc}
+                    disabled={isGeneratingCalc || !customPrompt.trim()}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer shadow-sm shrink-0"
                   >
-                    {isGeneratingPython ? (
+                    {isGeneratingCalc ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <Sparkles className="w-3.5 h-3.5" />
                     )}
-                    <span>Generar con IA</span>
+                    <span>Calcular con IA</span>
                   </button>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Python Code Editor */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-slate-300 font-bold">
-                  <Terminal className="w-4 h-4 text-emerald-400" />
-                  <span>Editor de Código Python 3</span>
+            {/* TECHNICAL RESULT CARD & INSERTION CONTROLS */}
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3 animate-scaleUp">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <Calculator className="w-4 h-4 text-amber-400" />
+                  <span className="font-bold text-slate-200">Desglose Técnico Formateado para Informe</span>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(pythonCode);
-                      setCopiedCode(true);
-                      setTimeout(() => setCopiedCode(false), 2000);
+                      navigator.clipboard.writeText(activeCalculationText);
+                      setCopiedText(true);
+                      setTimeout(() => setCopiedText(false), 2000);
                     }}
-                    className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg transition"
+                    className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 bg-slate-800 px-2.5 py-1 rounded-lg transition"
                   >
-                    {copiedCode ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedCode ? 'Copiado' : 'Copiar'}</span>
+                    {copiedText ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedText ? 'Copiado' : 'Copiar'}</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => {
-                      const blob = new Blob([pythonCode], { type: 'text/x-python' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `calculo_venequip_${selectedTemplateId}.py`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg transition"
+                    onClick={() => handleInsertIntoReport('3_pruebas_actividades')}
+                    className="text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer"
                   >
-                    <Download className="w-3 h-3" />
-                    <span>Descargar .py</span>
+                    <CheckCircle2 className="w-3 h-3 text-amber-400" />
+                    <span>Insertar en Secc. 3 (Pruebas)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleInsertIntoReport('6_conclusiones_recomendaciones')}
+                    className="text-[11px] bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3 h-3 text-sky-400" />
+                    <span>Insertar en Secc. 6 (Conclusiones)</span>
                   </button>
                 </div>
               </div>
 
-              <textarea
-                value={pythonCode}
-                onChange={(e) => setPythonCode(e.target.value)}
-                rows={10}
-                spellCheck={false}
-                className="w-full bg-slate-950 border border-slate-700 font-mono text-xs text-emerald-300 p-3 rounded-xl focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition leading-relaxed resize-y"
-              />
-            </div>
-
-            {/* Run Button and Output Console */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
-              <button
-                type="button"
-                onClick={handleRunPython}
-                disabled={isRunningPython || !pythonCode.trim()}
-                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-black flex items-center justify-center space-x-2 transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 cursor-pointer"
-              >
-                {isRunningPython ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                    <span>Ejecutando en Servidor Python...</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 text-slate-950 fill-current" />
-                    <span>▶ Ejecutar Código Python</span>
-                  </>
-                )}
-              </button>
-
-              {pythonOutput && (
-                <div className="text-[11px] text-slate-400 flex items-center gap-3">
-                  <span>Tiempo: <strong>{pythonOutput.executionTimeMs} ms</strong></span>
-                  <span className={`px-2 py-0.5 rounded-full font-bold ${
-                    pythonOutput.exitCode === 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
-                  }`}>
-                    {pythonOutput.exitCode === 0 ? '✓ Exitoso (Exit 0)' : `✕ Error (Exit ${pythonOutput.exitCode})`}
-                  </span>
+              {insertedSuccess && (
+                <div className="bg-emerald-950/80 border border-emerald-600/60 p-2 rounded-lg text-emerald-300 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>¡Resultados del cálculo insertados correctamente en el informe técnico!</span>
                 </div>
               )}
+
+              <pre className="font-mono text-xs text-slate-100 whitespace-pre-wrap leading-relaxed max-h-56 overflow-y-auto bg-slate-900/60 p-3 rounded-lg border border-slate-800/80">
+                {activeCalculationText || '(Configura los parámetros para ver el resultado técnico)'}
+              </pre>
             </div>
-
-            {/* Terminal Output Window */}
-            {pythonOutput && (
-              <div className="space-y-2 bg-slate-950 border border-slate-800 rounded-xl p-4 animate-scaleUp">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
-                    <span className="font-mono text-slate-400 font-bold ml-1">Terminal de Salida (Stdout)</span>
-                  </div>
-
-                  {pythonOutput.stdout && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleInsertIntoReport("3_pruebas_actividades")}
-                        className="text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-3 h-3 text-amber-400" />
-                        <span>Insertar en Secc. 3 (Pruebas)</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleInsertIntoReport("6_conclusiones_recomendaciones")}
-                        className="text-[11px] bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-3 h-3 text-sky-400" />
-                        <span>Insertar en Secc. 6 (Conclusiones)</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {insertedSuccess && (
-                  <div className="bg-emerald-950/80 border border-emerald-600/60 p-2 rounded-lg text-emerald-300 text-xs font-bold flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>¡Resultados del cálculo insertados correctamente en el informe técnico!</span>
-                  </div>
-                )}
-
-                <pre className="font-mono text-xs text-slate-100 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
-                  {pythonOutput.stdout || (pythonOutput.stderr ? '' : '(Sin salida por consola)')}
-                </pre>
-
-                {pythonOutput.stderr && (
-                  <div className="pt-2 border-t border-rose-900/50">
-                    <span className="text-[11px] font-mono text-rose-400 font-bold block mb-1">Stderr / Advertencias:</span>
-                    <pre className="font-mono text-xs text-rose-300 whitespace-pre-wrap">
-                      {pythonOutput.stderr}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
-        {/* TAB 3: LIVE GEMINI CHAT */}
+        {/* TAB 3: LIVE MULTIBRAND CHAT */}
         {activeTab === 'chat' && (
           <div className="flex flex-col flex-1 overflow-hidden p-4 sm:p-6 space-y-4">
-            
-            {/* Quick Prompt Chips */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs shrink-0">
               <span className="text-slate-500 text-[11px] font-bold shrink-0">Sugerencias:</span>
               {[
                 "Códigos de falla MID 036 CID 0100 FMI 04",
-                "Torque de culata motor CAT C15",
+                "Torque de culata motor CAT C15 / Cummins QSK",
                 "Procedimiento toma de muestra SOS",
                 "Límites de vibración según ISO 10816",
-                "Holgura de válvulas de escape C18"
+                "Holgura de válvulas de escape C18 / Perkins"
               ].map((chip, i) => (
                 <button
                   key={i}
                   type="button"
-                  onClick={() => {
-                    setChatInput(chip);
-                  }}
+                  onClick={() => setChatInput(chip)}
                   className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-full text-[11px] whitespace-nowrap transition cursor-pointer"
                 >
                   {chip}
@@ -912,7 +1173,6 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
               ))}
             </div>
 
-            {/* Chat History Box */}
             <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-y-auto space-y-3 min-h-[260px] max-h-[380px]">
               {chatMessages.map((msg, index) => (
                 <div
@@ -932,7 +1192,7 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
                       ) : (
                         <span className="flex items-center gap-1 text-amber-300">
                           <Sparkles className="w-3 h-3" />
-                          <span>Gemini 3.7 Asistente SIS</span>
+                          <span>Asistente Técnico Venequip</span>
                         </span>
                       )}
                       <span>• {msg.time}</span>
@@ -944,19 +1204,18 @@ export const AIAnalyzerModal: React.FC<AIAnalyzerModalProps> = ({
               {isChatSending && (
                 <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50 p-3 rounded-2xl max-w-xs border border-slate-700 animate-pulse">
                   <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                  <span>Gemini consultando manuales técnicos...</span>
+                  <span>Consultando manuales y base técnica...</span>
                 </div>
               )}
               <div ref={chatBottomRef} />
             </div>
 
-            {/* Chat Input Bar */}
             <div className="flex gap-2 shrink-0">
               <input
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Pregunta sobre códigos de falla, torques, diagramas Caterpillar o cálculos..."
+                placeholder="Pregunta sobre códigos de falla, torques, diagramas o procedimientos..."
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
