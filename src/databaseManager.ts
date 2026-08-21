@@ -9,7 +9,9 @@ import {
   getDoc, 
   getDocs, 
   deleteDoc, 
-  onSnapshot 
+  onSnapshot,
+  handleFirestoreQuotaExhausted,
+  isFirestoreQuotaExhausted
 } from './firebase';
 
 export interface LocalUser {
@@ -177,8 +179,6 @@ const STORAGE_KEY_SUCURSALES = 'venequip_db_sucursales_v2';
 const STORAGE_KEY_HERRAMIENTAS = 'venequip_db_herramientas_v2';
 const STORAGE_KEY_SEEDED = 'venequip_firebase_seeded_v2';
 
-let isFirestoreQuotaExhausted = false;
-
 /**
  * Returns the number of reports waiting in the offline queue to be synchronized
  */
@@ -197,7 +197,7 @@ export function getPendingReportsCount(): number {
  * Flushes the pending sync queue to Cloud Firestore
  */
 export async function flushPendingReportsQueue(): Promise<number> {
-  if (isFirestoreQuotaExhausted) return 0;
+  if (isFirestoreQuotaExhausted()) return 0;
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PENDING_QUEUE);
     if (!raw) return 0;
@@ -208,6 +208,10 @@ export async function flushPendingReportsQueue(): Promise<number> {
     let syncedCount = 0;
 
     for (const report of queue) {
+      if (isFirestoreQuotaExhausted()) {
+        remainingQueue.push(report);
+        continue;
+      }
       const reportNumber = report.encabezado_venequip?.numero_servicio || `REP-${Date.now()}`;
       try {
         const safeDocId = reportNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -226,7 +230,7 @@ export async function flushPendingReportsQueue(): Promise<number> {
         syncedCount++;
       } catch (err: any) {
         if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
-          isFirestoreQuotaExhausted = true;
+          handleFirestoreQuotaExhausted();
           remainingQueue.push(report);
           break;
         }
@@ -273,7 +277,7 @@ export function initializeLocalDatabase(): void {
  * Pushes initial users and default catalogues to Cloud Firestore once, avoiding quota exhaustion
  */
 export async function seedAllDataToFirebase(force: boolean = false): Promise<void> {
-  if (isFirestoreQuotaExhausted) return;
+  if (isFirestoreQuotaExhausted()) return;
   if (!force && localStorage.getItem(STORAGE_KEY_SEEDED)) {
     return;
   }
@@ -282,6 +286,7 @@ export async function seedAllDataToFirebase(force: boolean = false): Promise<voi
     // 1. Seed users
     const users = getLocalUsers();
     for (const u of users) {
+      if (isFirestoreQuotaExhausted()) break;
       const safeId = (u.email || u.uid || `user_${u.id}`).replace(/[^a-zA-Z0-9_-]/g, '_');
       const userRef = doc(db, 'users', safeId);
       await setDoc(userRef, {
@@ -296,12 +301,14 @@ export async function seedAllDataToFirebase(force: boolean = false): Promise<voi
         phone: u.phone || '',
         updatedAt: new Date().toISOString()
       }, { merge: true }).catch((err) => {
-        if (err?.code === 'resource-exhausted') isFirestoreQuotaExhausted = true;
+        if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+          handleFirestoreQuotaExhausted();
+        }
       });
     }
 
     // 2. Seed catalogs
-    if (!isFirestoreQuotaExhausted) {
+    if (!isFirestoreQuotaExhausted()) {
       const catalogsDocRef = doc(db, 'catalogs', 'master_catalogs');
       await setDoc(catalogsDocRef, {
         clientes: DEFAULT_CLIENTES,
@@ -312,13 +319,17 @@ export async function seedAllDataToFirebase(force: boolean = false): Promise<voi
         repuestos: DEFAULT_REPUESTOS_CAT,
         updatedAt: new Date().toISOString()
       }, { merge: true }).catch((err) => {
-        if (err?.code === 'resource-exhausted') isFirestoreQuotaExhausted = true;
+        if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+          handleFirestoreQuotaExhausted();
+        }
       });
     }
 
     localStorage.setItem(STORAGE_KEY_SEEDED, 'true');
   } catch (e: any) {
-    if (e?.code === 'resource-exhausted') isFirestoreQuotaExhausted = true;
+    if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
+      handleFirestoreQuotaExhausted();
+    }
   }
 }
 
@@ -327,31 +338,35 @@ export async function seedAllDataToFirebase(force: boolean = false): Promise<voi
  */
 export async function getRemoteUsers(): Promise<LocalUser[]> {
   initializeLocalDatabase();
-  try {
-    const usersCol = collection(db, 'users');
-    const snapshot = await getDocs(usersCol);
-    if (!snapshot.empty) {
-      const remoteUsers: LocalUser[] = [];
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data() as LocalUser;
-        if (data && data.email) {
-          remoteUsers.push(data);
-        }
-      });
+  if (!isFirestoreQuotaExhausted()) {
+    try {
+      const usersCol = collection(db, 'users');
+      const snapshot = await getDocs(usersCol);
+      if (!snapshot.empty) {
+        const remoteUsers: LocalUser[] = [];
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data() as LocalUser;
+          if (data && data.email) {
+            remoteUsers.push(data);
+          }
+        });
 
-      if (remoteUsers.length > 0) {
-        // Merge with local users to ensure no records are lost
-        const local = getLocalUsers();
-        const mergedMap = new Map<string, LocalUser>();
-        local.forEach(u => mergedMap.set(u.email.toLowerCase(), u));
-        remoteUsers.forEach(u => mergedMap.set(u.email.toLowerCase(), { ...mergedMap.get(u.email.toLowerCase()), ...u }));
-        const mergedList = Array.from(mergedMap.values());
-        localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(mergedList));
-        return mergedList;
+        if (remoteUsers.length > 0) {
+          // Merge with local users to ensure no records are lost
+          const local = getLocalUsers();
+          const mergedMap = new Map<string, LocalUser>();
+          local.forEach(u => mergedMap.set(u.email.toLowerCase(), u));
+          remoteUsers.forEach(u => mergedMap.set(u.email.toLowerCase(), { ...mergedMap.get(u.email.toLowerCase()), ...u }));
+          const mergedList = Array.from(mergedMap.values());
+          localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(mergedList));
+          return mergedList;
+        }
+      }
+    } catch (err: any) {
+      if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+        handleFirestoreQuotaExhausted();
       }
     }
-  } catch (err) {
-    console.warn('Firestore users fetch notice (using cache/local):', err);
   }
   return getLocalUsers();
 }
@@ -360,6 +375,7 @@ export async function getRemoteUsers(): Promise<LocalUser[]> {
  * Subscribes to real-time changes in users from Cloud Firestore
  */
 export function subscribeToUsers(onUsersUpdate: (users: LocalUser[]) => void): () => void {
+  if (isFirestoreQuotaExhausted()) return () => {};
   try {
     const usersCol = collection(db, 'users');
     return onSnapshot(usersCol, (snapshot) => {
@@ -379,10 +395,16 @@ export function subscribeToUsers(onUsersUpdate: (users: LocalUser[]) => void): (
         localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(mergedList));
         onUsersUpdate(mergedList);
       }
-    }, (error) => {
-      console.warn('Firestore users subscription error:', error);
+    }, (error: any) => {
+      if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota')) {
+        handleFirestoreQuotaExhausted();
+      }
+      console.warn('Firestore users subscription notice:', error?.message || error);
     });
-  } catch (e) {
+  } catch (e: any) {
+    if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
+      handleFirestoreQuotaExhausted();
+    }
     return () => {};
   }
 }
@@ -476,12 +498,12 @@ export function saveLocalUsers(users: LocalUser[]): void {
     console.error('Error saving local users:', err);
   }
 
-  if (isFirestoreQuotaExhausted) return;
+  if (isFirestoreQuotaExhausted()) return;
 
   // Asynchronously synchronize users with Firestore
   try {
     users.forEach(async (u) => {
-      if (isFirestoreQuotaExhausted) return;
+      if (isFirestoreQuotaExhausted()) return;
       const safeId = (u.email || u.uid || `user_${u.id}`).replace(/[^a-zA-Z0-9_-]/g, '_');
       const userRef = doc(db, 'users', safeId);
       await setDoc(userRef, {
@@ -495,7 +517,9 @@ export function saveLocalUsers(users: LocalUser[]): void {
         phone: u.phone || '',
         updatedAt: new Date().toISOString()
       }, { merge: true }).catch((err) => {
-        if (err?.code === 'resource-exhausted') isFirestoreQuotaExhausted = true;
+        if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+          handleFirestoreQuotaExhausted();
+        }
       });
     });
   } catch (e) {
@@ -548,34 +572,39 @@ export async function authenticateCredentials(email: string, pass: string): Prom
   const isMasterPass = cleanPass === 'admin' || cleanPass === 'admin1234' || cleanPass === 'venequip2026';
   
   // Check direct in Cloud Firestore in real time if not in cache or if credentials need cloud verification
-  try {
-    const safeId = cleanEmail.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const userDocRef = doc(db, 'users', safeId);
-    const userDoc = await getDoc(userDocRef);
-    if (userDoc.exists()) {
-      const cloudUser = userDoc.data() as LocalUser;
-      if (cloudUser && cloudUser.email?.toLowerCase() === cleanEmail) {
-        if (cloudUser.status === 'inactive') {
-          throw new Error('Esta cuenta ha sido desactivada temporalmente por el Administrador.');
+  if (!isFirestoreQuotaExhausted()) {
+    try {
+      const safeId = cleanEmail.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const userDocRef = doc(db, 'users', safeId);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        const cloudUser = userDoc.data() as LocalUser;
+        if (cloudUser && cloudUser.email?.toLowerCase() === cleanEmail) {
+          if (cloudUser.status === 'inactive') {
+            throw new Error('Esta cuenta ha sido desactivada temporalmente por el Administrador.');
+          }
+          if (cloudUser.password && cloudUser.password !== cleanPass && !(isMaster && isMasterPass)) {
+            throw new Error('La contraseña ingresada es incorrecta. Verifique e intente nuevamente.');
+          }
+          // Cache to local users
+          const currentUsers = getLocalUsers();
+          const cIdx = currentUsers.findIndex(u => u.email?.toLowerCase() === cleanEmail);
+          if (cIdx >= 0) {
+            currentUsers[cIdx] = cloudUser;
+          } else {
+            currentUsers.push(cloudUser);
+          }
+          saveLocalUsers(currentUsers);
+          return cloudUser;
         }
-        if (cloudUser.password && cloudUser.password !== cleanPass && !(isMaster && isMasterPass)) {
-          throw new Error('La contraseña ingresada es incorrecta. Verifique e intente nuevamente.');
-        }
-        // Cache to local users
-        const currentUsers = getLocalUsers();
-        const cIdx = currentUsers.findIndex(u => u.email?.toLowerCase() === cleanEmail);
-        if (cIdx >= 0) {
-          currentUsers[cIdx] = cloudUser;
-        } else {
-          currentUsers.push(cloudUser);
-        }
-        saveLocalUsers(currentUsers);
-        return cloudUser;
       }
-    }
-  } catch (firestoreAuthErr: any) {
-    if (firestoreAuthErr.message && (firestoreAuthErr.message.includes('contraseña') || firestoreAuthErr.message.includes('desactivada'))) {
-      throw firestoreAuthErr;
+    } catch (firestoreAuthErr: any) {
+      if (firestoreAuthErr?.code === 'resource-exhausted' || firestoreAuthErr?.message?.includes('Quota')) {
+        handleFirestoreQuotaExhausted();
+      }
+      if (firestoreAuthErr.message && (firestoreAuthErr.message.includes('contraseña') || firestoreAuthErr.message.includes('desactivada'))) {
+        throw firestoreAuthErr;
+      }
     }
   }
 
@@ -613,32 +642,36 @@ export async function authenticateCredentials(email: string, pass: string): Prom
 export async function getStoredReports(): Promise<InformeTecnico[]> {
   initializeLocalDatabase();
 
-  // Try fetching from Cloud Firestore first
-  try {
-    const reportsCol = collection(db, 'reports');
-    const snapshot = await getDocs(reportsCol);
-    if (!snapshot.empty) {
-      const firestoreReports: InformeTecnico[] = [];
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        if (data && data.reportData) {
-          try {
-            const parsed = typeof data.reportData === 'string' ? JSON.parse(data.reportData) : data.reportData;
-            firestoreReports.push(parsed);
-          } catch (e) {}
-        } else if (data && data.encabezado_venequip) {
-          firestoreReports.push(data as InformeTecnico);
-        }
-      });
+  // Try fetching from Cloud Firestore first if quota allows
+  if (!isFirestoreQuotaExhausted()) {
+    try {
+      const reportsCol = collection(db, 'reports');
+      const snapshot = await getDocs(reportsCol);
+      if (!snapshot.empty) {
+        const firestoreReports: InformeTecnico[] = [];
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data && data.reportData) {
+            try {
+              const parsed = typeof data.reportData === 'string' ? JSON.parse(data.reportData) : data.reportData;
+              firestoreReports.push(parsed);
+            } catch (e) {}
+          } else if (data && data.encabezado_venequip) {
+            firestoreReports.push(data as InformeTecnico);
+          }
+        });
 
-      if (firestoreReports.length > 0) {
-        // Cache to local storage
-        localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(firestoreReports));
-        return firestoreReports;
+        if (firestoreReports.length > 0) {
+          // Cache to local storage
+          localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(firestoreReports));
+          return firestoreReports;
+        }
+      }
+    } catch (firestoreErr: any) {
+      if (firestoreErr?.code === 'resource-exhausted' || firestoreErr?.message?.includes('Quota')) {
+        handleFirestoreQuotaExhausted();
       }
     }
-  } catch (firestoreErr) {
-    console.log('Firestore fetch notice (using cache/local):', firestoreErr);
   }
 
   // Try backend API
@@ -695,7 +728,7 @@ export async function saveStoredReport(report: InformeTecnico): Promise<void> {
   }
 
   // 1. Sync to Cloud Firestore online database in real-time (with quota protection)
-  if (!isFirestoreQuotaExhausted) {
+  if (!isFirestoreQuotaExhausted()) {
     try {
       const safeDocId = reportNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
       const reportDocRef = doc(db, 'reports', safeDocId);
@@ -712,7 +745,7 @@ export async function saveStoredReport(report: InformeTecnico): Promise<void> {
       }, { merge: true });
     } catch (firestoreErr: any) {
       if (firestoreErr?.code === 'resource-exhausted' || firestoreErr?.message?.includes('Quota')) {
-        isFirestoreQuotaExhausted = true;
+        handleFirestoreQuotaExhausted();
       }
       try {
         const raw = localStorage.getItem(STORAGE_KEY_PENDING_QUEUE);
@@ -757,6 +790,7 @@ export async function saveStoredReport(report: InformeTecnico): Promise<void> {
  * Subscribes to real-time updates of technical reports in Cloud Firestore
  */
 export function subscribeToReports(onReportsUpdate: (reports: InformeTecnico[]) => void): () => void {
+  if (isFirestoreQuotaExhausted()) return () => {};
   try {
     const reportsCol = collection(db, 'reports');
     return onSnapshot(reportsCol, (snapshot) => {
@@ -776,11 +810,16 @@ export function subscribeToReports(onReportsUpdate: (reports: InformeTecnico[]) 
         localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(liveReports));
         onReportsUpdate(liveReports);
       }
-    }, (error) => {
-      console.warn('Firestore real-time subscription error:', error);
+    }, (error: any) => {
+      if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota')) {
+        handleFirestoreQuotaExhausted();
+      }
+      console.warn('Firestore real-time subscription notice:', error?.message || error);
     });
-  } catch (err) {
-    console.warn('Failed to subscribe to Firestore reports:', err);
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+      handleFirestoreQuotaExhausted();
+    }
     return () => {};
   }
 }
@@ -796,10 +835,16 @@ export async function deleteStoredReport(numeroServicio: string): Promise<void> 
   } catch (e) {}
 
   // Delete from Firestore
-  try {
-    const safeDocId = numeroServicio.replace(/[^a-zA-Z0-9_-]/g, '_');
-    await deleteDoc(doc(db, 'reports', safeDocId));
-  } catch (e) {}
+  if (!isFirestoreQuotaExhausted()) {
+    try {
+      const safeDocId = numeroServicio.replace(/[^a-zA-Z0-9_-]/g, '_');
+      await deleteDoc(doc(db, 'reports', safeDocId));
+    } catch (e: any) {
+      if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
+        handleFirestoreQuotaExhausted();
+      }
+    }
+  }
 
   // Delete from backend API
   try {
@@ -1068,11 +1113,13 @@ export function recordSessionAuditLog(entry: { email: string; role?: string; eve
   } catch (e) {}
 
   // Asynchronously record log in Firestore online (if quota allows)
-  if (!isFirestoreQuotaExhausted) {
+  if (!isFirestoreQuotaExhausted()) {
     try {
       const logDocRef = doc(db, 'audit_logs', newLog.id);
       setDoc(logDocRef, newLog).catch((err) => {
-        if (err?.code === 'resource-exhausted') isFirestoreQuotaExhausted = true;
+        if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+          handleFirestoreQuotaExhausted();
+        }
       });
     } catch (e) {}
   }

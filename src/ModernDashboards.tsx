@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   BarChart, 
   Bar, 
@@ -139,16 +139,14 @@ export const ModernDashboards: React.FC<ModernDashboardProps> = ({
   const [stats, setStats] = useState<DashboardStatsData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isAutoRefresh, setIsAutoRefresh] = useState<boolean>(true);
-  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(15);
-  const [secondsSinceRefresh, setSecondsSinceRefresh] = useState<number>(0);
-  const [liveSecondsCounter, setLiveSecondsCounter] = useState<number>(0);
+  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(30);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
 
   // Search & Filter within Online Users
   const [userSearchQuery, setUserSearchQuery] = useState<string>('');
   const [userBranchFilter, setUserBranchFilter] = useState<string>('TODAS');
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const tickRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchStats = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -157,7 +155,7 @@ export const ModernDashboards: React.FC<ModernDashboardProps> = ({
       const data = await res.json();
       if (data.success) {
         setStats(data);
-        setSecondsSinceRefresh(0);
+        setLastRefreshedAt(new Date());
       }
     } catch (err) {
       console.error('Error al cargar métricas del dashboard:', err);
@@ -173,18 +171,7 @@ export const ModernDashboards: React.FC<ModernDashboardProps> = ({
     }
   }, [fetchStats, isAdmin]);
 
-  // Real-time ticking effect (every second updates duration counters smoothly)
-  useEffect(() => {
-    tickRef.current = setInterval(() => {
-      setSecondsSinceRefresh(prev => prev + 1);
-      setLiveSecondsCounter(prev => prev + 1);
-    }, 1000);
-    return () => {
-      if (tickRef.current) clearInterval(tickRef.current);
-    };
-  }, []);
-
-  // Automatic real-time polling
+  // Automatic real-time polling (every 30s silently)
   useEffect(() => {
     if (isAutoRefresh && refreshIntervalSec > 0) {
       timerRef.current = setInterval(() => {
@@ -196,7 +183,7 @@ export const ModernDashboards: React.FC<ModernDashboardProps> = ({
     };
   }, [isAutoRefresh, refreshIntervalSec, fetchStats]);
 
-  // Format seconds into readable duration (e.g. "1h 24m 30s" or "45m 12s")
+  // Format seconds into readable duration (e.g. "1h 24m" or "45m")
   const formatDuration = (totalSecs: number) => {
     const adjusted = Math.max(totalSecs, 0);
     const hrs = Math.floor(adjusted / 3600);
@@ -204,7 +191,7 @@ export const ModernDashboards: React.FC<ModernDashboardProps> = ({
     const secs = adjusted % 60;
     
     if (hrs > 0) {
-      return `${hrs}h ${mins}m ${secs}s`;
+      return `${hrs}h ${mins}m`;
     }
     if (mins > 0) {
       return `${mins}m ${secs}s`;
@@ -221,29 +208,33 @@ export const ModernDashboards: React.FC<ModernDashboardProps> = ({
     return `${totalMins} min`;
   };
 
-  // Filtered Online Users List
+  // Filtered Online Users List memoized
   const rawUsers = stats?.onlineUsers || [];
-  const filteredUsers = rawUsers.filter(u => {
-    const matchSearch = userSearchQuery === '' || 
-      u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-      u.currentAction.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-      u.role.toLowerCase().includes(userSearchQuery.toLowerCase());
-    
-    const matchBranch = userBranchFilter === 'TODAS' || u.branch.toUpperCase().includes(userBranchFilter.toUpperCase());
-    return matchSearch && matchBranch;
-  });
+  const filteredUsers = useMemo(() => {
+    return rawUsers.filter(u => {
+      const matchSearch = userSearchQuery === '' || 
+        u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+        u.email.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+        u.currentAction.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+        u.role.toLowerCase().includes(userSearchQuery.toLowerCase());
+      
+      const matchBranch = userBranchFilter === 'TODAS' || u.branch.toUpperCase().includes(userBranchFilter.toUpperCase());
+      return matchSearch && matchBranch;
+    });
+  }, [rawUsers, userSearchQuery, userBranchFilter]);
 
   const onlineCount = rawUsers.filter(u => u.status === 'online').length;
 
-  // Chart data: User duration in current session
-  const userDurationChartData = rawUsers.map(u => ({
-    name: u.name.split(' ')[0] + ' ' + (u.name.split(' ')[1] || ''),
-    durationMins: Math.max(1, Math.round((u.totalDurationSeconds + liveSecondsCounter) / 60)),
-    branch: u.branch.split(' ')[0],
-    role: u.role,
-    historicalHours: (u.historicalTotalMinutes / 60).toFixed(1)
-  })).slice(0, 8);
+  // Chart data memoized for high performance
+  const userDurationChartData = useMemo(() => {
+    return rawUsers.map(u => ({
+      name: u.name.split(' ')[0] + ' ' + (u.name.split(' ')[1] || ''),
+      durationMins: Math.max(1, Math.round(u.totalDurationSeconds / 60)),
+      branch: u.branch.split(' ')[0],
+      role: u.role,
+      historicalHours: (u.historicalTotalMinutes / 60).toFixed(1)
+    })).slice(0, 8);
+  }, [rawUsers]);
 
   // Custom Tooltip for Charts
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -320,8 +311,8 @@ export const ModernDashboards: React.FC<ModernDashboardProps> = ({
           <div className="flex items-center gap-2.5 flex-wrap">
             <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-600">
               <Clock className="w-3.5 h-3.5 mr-1.5 text-amber-500 shrink-0" />
-              <span className="text-[11px] text-slate-500 mr-1.5">Actualizado hace:</span>
-              <span className="font-mono font-bold text-slate-800">{secondsSinceRefresh}s</span>
+              <span className="text-[11px] text-slate-500 mr-1.5">Sincronizado:</span>
+              <span className="font-mono font-bold text-slate-800">{lastRefreshedAt.toLocaleTimeString()}</span>
             </div>
 
             {/* Toggle Auto-Refresh */}
@@ -333,10 +324,10 @@ export const ModernDashboards: React.FC<ModernDashboardProps> = ({
                   ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100' 
                   : 'bg-white border-slate-300 text-slate-600 hover:text-slate-900'
               }`}
-              title={isAutoRefresh ? "Pausar auto-actualización" : "Activar auto-actualización cada 15s"}
+              title={isAutoRefresh ? "Pausar auto-actualización" : "Activar auto-actualización cada 30s"}
             >
               <Zap className={`w-3.5 h-3.5 ${isAutoRefresh ? 'text-amber-600 fill-amber-600' : ''}`} />
-              <span>{isAutoRefresh ? 'Auto: 15s' : 'Pausado'}</span>
+              <span>{isAutoRefresh ? 'Auto: 30s' : 'Pausado'}</span>
             </button>
 
             {/* Manual Refresh Button */}
@@ -566,7 +557,7 @@ export const ModernDashboards: React.FC<ModernDashboardProps> = ({
             {/* Live Users Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredUsers.map((u, idx) => {
-                const currentDurationSecs = u.totalDurationSeconds + liveSecondsCounter;
+                const currentDurationSecs = u.totalDurationSeconds || 0;
                 const isKelvin = u.email.toLowerCase().includes('kescalonaccv');
                 
                 return (

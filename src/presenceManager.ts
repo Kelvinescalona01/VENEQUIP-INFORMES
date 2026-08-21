@@ -2,12 +2,14 @@ import {
   collection, 
   doc, 
   setDoc, 
-  getDoc,
+  getDoc, 
   deleteDoc, 
   onSnapshot, 
-  serverTimestamp 
-} from 'firebase/firestore';
-import { db } from './firebase';
+  serverTimestamp,
+  db,
+  handleFirestoreQuotaExhausted,
+  isFirestoreQuotaExhausted
+} from './firebase';
 import { OnlineUserPresence, AppDynamicState } from './types';
 
 const STORAGE_KEY_PRESENCE = 'venequip_online_presence_cache';
@@ -86,7 +88,7 @@ export async function registerUserPresence(
   }
   localStorage.setItem(STORAGE_KEY_PRESENCE, JSON.stringify(currentList));
 
-  if (isQuotaExhausted) return;
+  if (isQuotaExhausted || isFirestoreQuotaExhausted()) return;
 
   try {
     const presenceDocRef = doc(db, 'presence', safeSessionDocId);
@@ -97,6 +99,7 @@ export async function registerUserPresence(
   } catch (err: any) {
     if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
       isQuotaExhausted = true;
+      handleFirestoreQuotaExhausted();
     }
   }
 }
@@ -108,12 +111,19 @@ export async function setUserOffline(userEmail: string): Promise<void> {
   const sessionId = sessionStorage.getItem(STORAGE_KEY_SESSION_ID);
   if (!sessionId || !userEmail) return;
 
+  if (isQuotaExhausted || isFirestoreQuotaExhausted()) return;
+
   const safeSessionDocId = `${userEmail.replace(/[^a-zA-Z0-9_-]/g, '_')}_${sessionId}`;
   const presenceDocRef = doc(db, 'presence', safeSessionDocId);
 
   try {
     await deleteDoc(presenceDocRef);
-  } catch (e) {
+  } catch (e: any) {
+    if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
+      isQuotaExhausted = true;
+      handleFirestoreQuotaExhausted();
+      return;
+    }
     try {
       await setDoc(presenceDocRef, {
         isOnline: false,
@@ -177,6 +187,10 @@ export function getCachedOnlineUsers(): OnlineUserPresence[] {
 export function subscribeToOnlineUsers(
   onUsersUpdate: (users: OnlineUserPresence[]) => void
 ): () => void {
+  if (isFirestoreQuotaExhausted()) {
+    onUsersUpdate(getCachedOnlineUsers());
+    return () => {};
+  }
   try {
     const presenceCol = collection(db, 'presence');
     return onSnapshot(presenceCol, (snapshot) => {
@@ -208,11 +222,16 @@ export function subscribeToOnlineUsers(
       const result = Array.from(deduplicatedMap.values());
       localStorage.setItem(STORAGE_KEY_PRESENCE, JSON.stringify(result));
       onUsersUpdate(result);
-    }, (error) => {
-      console.warn('Firestore presence subscription notice:', error);
+    }, (error: any) => {
+      if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota')) {
+        handleFirestoreQuotaExhausted();
+      }
       onUsersUpdate(getCachedOnlineUsers());
     });
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+      handleFirestoreQuotaExhausted();
+    }
     onUsersUpdate(getCachedOnlineUsers());
     return () => {};
   }
@@ -235,7 +254,7 @@ export async function saveAppStateToFirestore(
     localStorage.setItem(`venequip_state_${safeKey}`, JSON.stringify(value));
   } catch (e) {}
 
-  if (isQuotaExhausted) return;
+  if (isQuotaExhausted || isFirestoreQuotaExhausted()) return;
 
   try {
     const docRef = doc(db, 'app_state', safeKey);
@@ -249,6 +268,7 @@ export async function saveAppStateToFirestore(
   } catch (err: any) {
     if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
       isQuotaExhausted = true;
+      handleFirestoreQuotaExhausted();
     }
   }
 }
@@ -258,17 +278,23 @@ export async function saveAppStateToFirestore(
  */
 export async function getAppStateFromFirestore<T = any>(key: string, defaultValue?: T): Promise<T> {
   const safeKey = key.replace(/[^a-zA-Z0-9_-]/g, '_');
-  try {
-    const docRef = doc(db, 'app_state', safeKey);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      const data = docSnap.data() as AppDynamicState;
-      if (data && data.value !== undefined) {
-        localStorage.setItem(`venequip_state_${safeKey}`, JSON.stringify(data.value));
-        return data.value as T;
+  if (!isFirestoreQuotaExhausted()) {
+    try {
+      const docRef = doc(db, 'app_state', safeKey);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data() as AppDynamicState;
+        if (data && data.value !== undefined) {
+          localStorage.setItem(`venequip_state_${safeKey}`, JSON.stringify(data.value));
+          return data.value as T;
+        }
+      }
+    } catch (e: any) {
+      if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
+        handleFirestoreQuotaExhausted();
       }
     }
-  } catch (e) {}
+  }
 
   // Fallback to local storage
   try {
@@ -287,6 +313,7 @@ export function subscribeToAppState<T = any>(
   onUpdate: (value: T) => void
 ): () => void {
   const safeKey = key.replace(/[^a-zA-Z0-9_-]/g, '_');
+  if (isFirestoreQuotaExhausted()) return () => {};
   try {
     const docRef = doc(db, 'app_state', safeKey);
     return onSnapshot(docRef, (docSnap) => {
@@ -297,10 +324,15 @@ export function subscribeToAppState<T = any>(
           onUpdate(data.value as T);
         }
       }
-    }, (err) => {
-      console.warn(`Firestore state subscription error for ${key}:`, err);
+    }, (err: any) => {
+      if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+        handleFirestoreQuotaExhausted();
+      }
     });
-  } catch (e) {
+  } catch (e: any) {
+    if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
+      handleFirestoreQuotaExhausted();
+    }
     return () => {};
   }
 }
@@ -317,7 +349,7 @@ export async function saveFleetToFirestore(fleet: any[]): Promise<void> {
     localStorage.setItem('venequip_equipment_fleet_cache', JSON.stringify(fleet));
   } catch (e) {}
 
-  if (isQuotaExhausted) return;
+  if (isQuotaExhausted || isFirestoreQuotaExhausted()) return;
 
   try {
     const fleetDocRef = doc(db, 'app_state', 'caterpillar_fleet_registry');
@@ -329,6 +361,7 @@ export async function saveFleetToFirestore(fleet: any[]): Promise<void> {
   } catch (err: any) {
     if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
       isQuotaExhausted = true;
+      handleFirestoreQuotaExhausted();
     }
   }
 }
@@ -337,6 +370,7 @@ export async function saveFleetToFirestore(fleet: any[]): Promise<void> {
  * Subscribes to real-time Caterpillar Fleet updates
  */
 export function subscribeToFleetState(onUpdate: (fleet: any[]) => void): () => void {
+  if (isFirestoreQuotaExhausted()) return () => {};
   try {
     const fleetDocRef = doc(db, 'app_state', 'caterpillar_fleet_registry');
     return onSnapshot(fleetDocRef, (docSnap) => {
@@ -347,10 +381,15 @@ export function subscribeToFleetState(onUpdate: (fleet: any[]) => void): () => v
           onUpdate(data.value);
         }
       }
-    }, (err) => {
-      console.warn('Fleet subscription notice:', err);
+    }, (err: any) => {
+      if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota')) {
+        handleFirestoreQuotaExhausted();
+      }
     });
-  } catch (e) {
+  } catch (e: any) {
+    if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
+      handleFirestoreQuotaExhausted();
+    }
     return () => {};
   }
 }

@@ -137,9 +137,10 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     if (existingIdx >= 0) {
       currentList[existingIdx] = { ...currentList[existingIdx], ...newUserItem };
     } else {
-      currentList.push(newUserItem);
+      currentList.unshift(newUserItem);
     }
     saveLocalUsers(currentList);
+    setUsers([...currentList]);
 
     // Try API
     try {
@@ -160,7 +161,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       phone: '',
     });
     setShowAddForm(false);
-    fetchUsers();
   };
 
   const handleUpdateRole = async (userId: number, newRole: string) => {
@@ -169,6 +169,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     if (target) {
       target.role = newRole as any;
       saveLocalUsers(list);
+      setUsers([...list]);
     }
 
     try {
@@ -179,8 +180,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       });
     } catch (err) {}
 
-    onShowToast('Rol actualizado correctamente.', 'success');
-    fetchUsers();
+    onShowToast('Rol de usuario actualizado correctamente.', 'success');
   };
 
   const handleToggleStatus = async (userId: number, currentStatus: string) => {
@@ -190,6 +190,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     if (target) {
       target.status = newStatus as any;
       saveLocalUsers(list);
+      setUsers([...list]);
     }
 
     try {
@@ -201,7 +202,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     } catch (err) {}
 
     onShowToast(`Usuario ${newStatus === 'active' ? 'activado' : 'desactivado'}.`, 'info');
-    fetchUsers();
   };
 
   const handleDeleteUser = async (userId: number, name: string) => {
@@ -211,13 +211,13 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
     const list = getLocalUsers().filter(u => u.id !== userId);
     saveLocalUsers(list);
+    setUsers([...list]);
 
     try {
       await fetch(`/api/users/${userId}`, { method: 'DELETE' });
     } catch (err) {}
 
     onShowToast('Perfil de usuario eliminado.', 'info');
-    fetchUsers();
   };
 
   const handleAdminChangePassword = async (e: React.FormEvent) => {

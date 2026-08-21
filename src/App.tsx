@@ -196,76 +196,76 @@ export default function App() {
     };
   }, [isAuthenticated, user, userProfile, isAdmin, activeView, report.encabezado_venequip?.numero_servicio]);
 
-  // Automated background save to Cloud Firestore, Cloud SQL and Google Drive (Excel)
-  const syncReportBackground = async (currentReport: InformeTecnico) => {
+  // Optimized background save to Cloud Firestore and backend without blocking typing
+  const syncReportBackground = async (currentReport: InformeTecnico, syncDrive: boolean = false) => {
     // 1. Save to Cloud Firestore & local resilience engine
     try {
       await saveStoredReport(currentReport);
     } catch (fsErr) {
-      console.warn('Auto-save to Firestore:', fsErr);
+      // Background non-blocking
     }
 
-    // 2. Save to Express / Cloud SQL API
+    // 2. Save to Express / Local API asynchronously
     try {
-      await fetch('/api/reports', {
+      fetch('/api/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reportData: currentReport,
           createdByUid: user?.uid,
         }),
-      });
-    } catch (err) {
-      console.warn('Auto-save to Cloud SQL:', err);
-    }
+      }).catch(() => {});
+    } catch (err) {}
 
-    // 2. Automated upload to Google Drive if access token is available
-    if (accessToken) {
+    // 3. Drive sync only when explicitly requested (e.g. manual save) to keep editor 100% smooth
+    if (syncDrive && accessToken) {
       setDriveSyncStatus('saving');
       try {
         const driveResult = await uploadExcelReportToDrive(accessToken, currentReport);
         setDriveSyncStatus('synced');
 
-        // Log to database
-        await fetch('/api/sync-logs', {
+        fetch('/api/sync-logs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             eventType: 'AUTO_SYNC_EXCEL',
-            description: `Auto-guardado automático de informe ${currentReport.encabezado_venequip?.numero_servicio || ''} en Google Drive (Excel)`,
+            description: `Auto-guardado de informe ${currentReport.encabezado_venequip?.numero_servicio || ''} en Google Drive (Excel)`,
             userEmail: user?.email,
             fileUrl: driveResult.webViewLink,
           }),
-        });
+        }).catch(() => {});
       } catch (driveErr) {
-        console.warn('Auto-save to Google Drive:', driveErr);
         setDriveSyncStatus('offline');
       }
     }
   };
 
-  // Change handler with debounced auto-sync
+  // Change handler with instant local caching and lightweight debounced background sync
   const handleReportChange = (updated: InformeTecnico) => {
     const normalized = normalizeReport(updated);
     setReport(normalized);
     setIsSaved(false);
 
-    // Debounced automatic background sync (2.5 seconds after user finishes typing)
+    // Save draft locally immediately (0ms latency)
+    try {
+      localStorage.setItem('venequip_report_draft', JSON.stringify(normalized));
+    } catch (e) {}
+
+    // Debounced remote background sync (3.5s of typing inactivity)
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
     }
     autoSaveTimerRef.current = setTimeout(() => {
-      localStorage.setItem('venequip_report_draft', JSON.stringify(normalized));
       setIsSaved(true);
-      syncReportBackground(normalized);
-    }, 2500);
+      syncReportBackground(normalized, false);
+    }, 3500);
   };
 
   const handleSaveDraft = async () => {
     localStorage.setItem('venequip_report_draft', JSON.stringify(report));
     setIsSaved(true);
     showToast('Borrador guardado exitosamente.');
-    await syncReportBackground(report);
+    await syncReportBackground(report, true);
   };
 
   const handleResetDefault = () => {

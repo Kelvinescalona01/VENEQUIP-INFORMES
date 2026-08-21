@@ -113,7 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     sendPing();
-    const interval = setInterval(sendPing, 25000);
+    const interval = setInterval(sendPing, 60000);
     return () => clearInterval(interval);
   }, [userProfile]);
 

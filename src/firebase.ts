@@ -20,9 +20,17 @@ import {
   onSnapshot, 
   query, 
   orderBy,
-  serverTimestamp 
+  serverTimestamp,
+  disableNetwork,
+  enableNetwork,
+  setLogLevel
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+
+// Silence verbose internal backoff delay logs
+try {
+  setLogLevel('silent');
+} catch (e) {}
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -31,6 +39,47 @@ export const auth = getAuth(app);
 export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
   ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
   : getFirestore(app);
+
+const QUOTA_STORAGE_KEY = 'venequip_firestore_quota_exhausted_v2';
+
+export const isFirestoreQuotaExhausted = (): boolean => {
+  try {
+    const val = localStorage.getItem(QUOTA_STORAGE_KEY);
+    if (!val) return false;
+    const timestamp = parseInt(val, 10);
+    // Auto-reset after 12 hours
+    if (Date.now() - timestamp > 12 * 60 * 60 * 1000) {
+      localStorage.removeItem(QUOTA_STORAGE_KEY);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+let isNetworkDisabledDueToQuota = false;
+
+/**
+ * Gracefully disables Firestore network polling when daily write quota is reached,
+ * preventing continuous backend error logs and backoff delays.
+ */
+export const handleFirestoreQuotaExhausted = async () => {
+  if (isNetworkDisabledDueToQuota) return;
+  isNetworkDisabledDueToQuota = true;
+  try {
+    localStorage.setItem(QUOTA_STORAGE_KEY, Date.now().toString());
+    await disableNetwork(db);
+    console.info('Firestore switching to robust local cache mode (daily quota preserved).');
+  } catch (e) {
+    // Ignore if already offline
+  }
+};
+
+// Check on boot if quota was exhausted today, and immediately disable network if so
+if (isFirestoreQuotaExhausted()) {
+  handleFirestoreQuotaExhausted();
+}
 
 export { 
   collection, 
@@ -42,7 +91,9 @@ export {
   onSnapshot, 
   query, 
   orderBy,
-  serverTimestamp 
+  serverTimestamp,
+  disableNetwork,
+  enableNetwork
 };
 
 // Configure local persistence across browser sessions

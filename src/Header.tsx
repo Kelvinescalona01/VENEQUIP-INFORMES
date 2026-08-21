@@ -19,8 +19,9 @@ import {
   FileSpreadsheet, 
   Menu, 
   X, 
+  Wrench,
   Layers,
-  Wrench
+  Check
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { exportDatabaseToExcel } from './databaseManager';
@@ -65,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
   const menuRef = useRef<HTMLDivElement>(null);
   const mobileNavRef = useRef<HTMLDivElement>(null);
 
-  // Close menu on click outside
+  // Close menus on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -84,19 +85,19 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   return (
-    <header id="venequip-header" className="bg-white border-b border-slate-200 text-slate-900 sticky top-0 z-40 shadow-sm w-full select-none">
-      <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
+    <header id="venequip-header" className="bg-white border-b border-slate-200 text-slate-900 sticky top-0 z-40 shadow-xs w-full select-none">
+      <div className="w-full max-w-7xl mx-auto px-2.5 sm:px-4 lg:px-6">
         
         {/* Main Bar */}
         <div className="flex items-center justify-between min-h-[3.75rem] py-1.5 gap-1.5 sm:gap-3">
           
-          {/* Left: Logo & Brand */}
-          <div className="flex items-center space-x-2 shrink-0">
+          {/* Left: Brand / Logo */}
+          <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
             <div className="py-1 shrink-0 flex items-center">
-              <VenequipLogo className="w-28 sm:w-36 md:w-44 h-auto max-h-10" />
+              <VenequipLogo className="w-24 xs:w-28 sm:w-36 md:w-40 lg:w-44 h-auto max-h-9 sm:max-h-10" />
             </div>
-            <div className="hidden lg:block h-6 w-px bg-slate-200" />
-            <div className="hidden lg:flex flex-col">
+            <div className="hidden xl:block h-6 w-px bg-slate-200" />
+            <div className="hidden xl:flex flex-col">
               <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">
                 Informes Técnicos Multimarca
               </span>
@@ -106,14 +107,14 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Center: Main View Navigation (Adaptive for all screens) */}
-          <nav aria-label="Vistas principales" className="hidden md:flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-inner shrink-0 gap-1">
+          {/* Center: Main View Navigation (Adaptive for medium and large screens) */}
+          <nav aria-label="Vistas principales" className="hidden md:flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200 shadow-inner shrink-0 gap-1">
             <button
               id="btn-view-editor"
               onClick={() => setActiveView('editor')}
               className={`flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all min-h-[34px] cursor-pointer ${
                 activeView === 'editor'
-                  ? 'bg-slate-900 text-white shadow-sm'
+                  ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
               }`}
             >
@@ -125,7 +126,7 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => setActiveView('preview')}
               className={`flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all min-h-[34px] cursor-pointer ${
                 activeView === 'preview'
-                  ? 'bg-slate-900 text-white shadow-sm'
+                  ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
               }`}
             >
@@ -139,7 +140,7 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => setActiveView('fleet')}
               className={`flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all min-h-[34px] cursor-pointer ${
                 activeView === 'fleet'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
                   : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/70'
               }`}
               title="Control de Flota y Ciclos de Mantenimiento Preventivo CAT (PM1, PM2, PM3, PM4)"
@@ -148,14 +149,14 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Mantenimiento CAT</span>
             </button>
 
-            {/* DASHBOARD TAB: STRICTLY RESTRICTED TO ADMINISTRATORS */}
+            {/* DASHBOARD TAB: RESTRICTED TO ADMINISTRATORS */}
             {isAdmin && (
               <button
                 id="btn-view-dashboard"
                 onClick={() => setActiveView('dashboard')}
                 className={`flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg transition-all min-h-[34px] cursor-pointer ${
                   activeView === 'dashboard'
-                    ? 'bg-slate-900 text-amber-400 shadow-sm'
+                    ? 'bg-slate-900 text-amber-400 shadow-xs'
                     : 'text-amber-900 hover:text-slate-950 hover:bg-amber-200/70'
                 }`}
                 title="Panel de Métricas y Analíticas en Vivo (Exclusivo Administradores)"
@@ -179,14 +180,14 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-ai-process"
               onClick={onOpenAIModal}
-              className="bg-[#FFC20E] hover:bg-[#E0A800] text-black font-black text-xs px-2.5 sm:px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-all border border-amber-400 active:scale-95 min-h-[36px] cursor-pointer"
+              className="bg-[#FFC20E] hover:bg-[#E0A800] text-black font-black text-xs px-2.5 sm:px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-all border border-amber-400 active:scale-95 min-h-[36px] cursor-pointer"
               title="Procesar constancias físicas, fotos o notas con IA Gemini"
             >
               <Sparkles className="w-4 h-4 text-black shrink-0 animate-pulse" />
               <span className="font-black">IA</span>
             </button>
 
-            {/* Save Draft Button */}
+            {/* Save Draft Button (Compact on mobile) */}
             <button
               id="btn-save-draft"
               onClick={onSaveDraft}
@@ -201,33 +202,33 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden sm:inline">{isSaved ? 'Guardado' : 'Guardar'}</span>
             </button>
 
-            {/* Direct Excel Database Download Button (Prominent & Auto-Monitorable) */}
+            {/* Direct Excel Database Download Button (Hidden on tablet/mobile to avoid clutter) */}
             <button
               id="btn-export-excel-db-header"
               onClick={exportDatabaseToExcel}
-              className="hidden lg:flex bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold text-xs px-2.5 py-2 rounded-xl items-center gap-1.5 shadow-sm transition-all active:scale-95 min-h-[36px] cursor-pointer"
+              className="hidden lg:flex bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold text-xs px-2.5 py-2 rounded-xl items-center gap-1.5 shadow-xs transition-all active:scale-95 min-h-[36px] cursor-pointer"
               title="Descargar Base de Datos Completa Venequip en Excel (.xlsx)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span className="font-bold">Base de Datos Excel</span>
             </button>
 
-            {/* Google Drive & Cloud Workspace Sync */}
+            {/* Google Drive Sync Button (Desktop only) */}
             <button
               id="btn-open-drive-sync"
               onClick={onOpenDriveModal}
-              className="hidden md:flex bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs px-2.5 py-2 rounded-xl items-center gap-1.5 shadow-sm transition-all active:scale-95 min-h-[36px] cursor-pointer"
+              className="hidden xl:flex bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs px-2.5 py-2 rounded-xl items-center gap-1.5 shadow-xs transition-all active:scale-95 min-h-[36px] cursor-pointer"
               title="Sincronizar con Google Drive, Sheets y Gmail"
             >
               <Cloud className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-              <span className="hidden xl:inline">Drive Sync</span>
+              <span>Drive Sync</span>
             </button>
 
-            {/* Saved Reports History */}
+            {/* Saved Reports History (Desktop only) */}
             <button
               id="btn-saved-reports"
               onClick={onOpenSavedReportsModal}
-              className="hidden xl:flex bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs px-2.5 py-2 rounded-xl items-center gap-1.5 font-bold transition-all shadow-sm min-h-[36px] cursor-pointer"
+              className="hidden xl:flex bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs px-2.5 py-2 rounded-xl items-center gap-1.5 font-bold transition-all shadow-xs min-h-[36px] cursor-pointer"
               title="Consultar historial de informes guardados"
             >
               <FolderClock className="w-3.5 h-3.5 text-slate-600 shrink-0" />
@@ -238,7 +239,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-open-export-modal"
               onClick={onOpenExportModal}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-black text-xs px-2.5 sm:px-3 py-2 rounded-xl flex items-center gap-1.5 shadow transition-all border border-slate-800 active:scale-95 min-h-[36px] cursor-pointer"
+              className="bg-slate-900 hover:bg-slate-800 text-white font-black text-xs px-2.5 sm:px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-all border border-slate-800 active:scale-95 min-h-[36px] cursor-pointer"
               title="Descargar informe en Word, PDF o Excel"
             >
               <Download className="w-3.5 h-3.5 text-white shrink-0" />
@@ -258,7 +259,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500 text-xs font-black text-slate-950 shrink-0">
                     {(userProfile?.name || user.displayName || user.email || 'U').charAt(0).toUpperCase()}
                   </div>
-                  <div className="hidden xl:flex flex-col text-left text-[11px] leading-tight px-1 max-w-[110px]">
+                  <div className="hidden 2xl:flex flex-col text-left text-[11px] leading-tight px-1 max-w-[110px]">
                     <span className="font-bold text-slate-800 truncate">
                       {userProfile?.name || user.displayName || user.email?.split('@')[0]}
                     </span>
@@ -377,7 +378,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         </div>
 
-        {/* Mobile Navigation Drawer (Visible when hamburger is toggled) */}
+        {/* Mobile Navigation Drawer (Optimized and neatly organized) */}
         {showMobileNav && (
           <div ref={mobileNavRef} className="md:hidden border-t border-slate-200 py-3 space-y-3 animate-in slide-in-from-top-2 duration-150">
             
@@ -388,8 +389,8 @@ export const Header: React.FC<HeaderProps> = ({
                   setActiveView('editor');
                   setShowMobileNav(false);
                 }}
-                className={`flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                  activeView === 'editor' ? 'bg-slate-900 text-white' : 'text-slate-700'
+                className={`flex items-center justify-center gap-1 py-2.5 text-xs font-bold rounded-lg transition-all ${
+                  activeView === 'editor' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700'
                 }`}
               >
                 <PenTool className="w-3.5 h-3.5" />
@@ -400,8 +401,8 @@ export const Header: React.FC<HeaderProps> = ({
                   setActiveView('preview');
                   setShowMobileNav(false);
                 }}
-                className={`flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                  activeView === 'preview' ? 'bg-slate-900 text-white' : 'text-slate-700'
+                className={`flex items-center justify-center gap-1 py-2.5 text-xs font-bold rounded-lg transition-all ${
+                  activeView === 'preview' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
@@ -412,8 +413,8 @@ export const Header: React.FC<HeaderProps> = ({
                   setActiveView('fleet');
                   setShowMobileNav(false);
                 }}
-                className={`flex items-center justify-center gap-1 py-2 text-xs font-black rounded-lg transition-all ${
-                  activeView === 'fleet' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-amber-900'
+                className={`flex items-center justify-center gap-1 py-2.5 text-xs font-black rounded-lg transition-all ${
+                  activeView === 'fleet' ? 'bg-amber-500 text-slate-950 shadow-xs' : 'text-amber-900'
                 }`}
               >
                 <Wrench className="w-3.5 h-3.5" />
@@ -429,11 +430,11 @@ export const Header: React.FC<HeaderProps> = ({
                   setShowMobileNav(false);
                 }}
                 className={`w-full flex items-center justify-center gap-2 py-2.5 text-xs font-black rounded-xl transition-all ${
-                  activeView === 'dashboard' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-amber-50 text-amber-950 border border-amber-300'
+                  activeView === 'dashboard' ? 'bg-amber-500 text-slate-950 shadow-xs' : 'bg-amber-50 text-amber-950 border border-amber-300'
                 }`}
               >
                 <BarChart3 className="w-4 h-4 text-amber-900" />
-                <span>Dashboards y Métricas (Admin)</span>
+                <span>Dashboards y Métricas en Vivo (Admin)</span>
               </button>
             )}
 
@@ -493,7 +494,7 @@ export const Header: React.FC<HeaderProps> = ({
                   setShowMobileNav(false);
                   onResetDefault();
                 }}
-                className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 py-1 font-medium"
+                className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 py-1.5 font-medium cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Cargar Ejemplo CAT</span>
@@ -503,7 +504,7 @@ export const Header: React.FC<HeaderProps> = ({
                   setShowMobileNav(false);
                   onNewReport();
                 }}
-                className="flex items-center gap-1.5 text-emerald-700 hover:text-emerald-900 font-bold py-1"
+                className="flex items-center gap-1.5 text-emerald-700 hover:text-emerald-900 font-bold py-1.5 cursor-pointer"
               >
                 <PlusCircle className="w-3.5 h-3.5" />
                 <span>Nuevo Informe</span>
