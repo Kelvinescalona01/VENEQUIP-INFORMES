@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/* Tailwind v4 usa configuración CSS-first: se define aquí el breakpoint
+   "xs" que se usaba en el código (Header.tsx, LoginScreen.tsx) pero que
+   nunca estaba declarado, por lo que esas clases responsivas no surtían
+   ningún efecto. */
+@theme {
+  --breakpoint-xs: 26rem; /* 416px */
+}
+
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  #venequip-header,
+  header,
+  footer,
+  #modal-ai-analyzer-backdrop,
+  #modal-signature-canvas-backdrop,
+  #modal-json-viewer-backdrop {
+    display: none !important;
+  }
+
+  #venequip-official-document {
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
